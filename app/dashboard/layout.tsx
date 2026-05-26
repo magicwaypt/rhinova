@@ -31,20 +31,25 @@ import {
   User,
   ChevronRight,
   Award,
-  Sparkles
+  Sparkles,
+  UserPlus,
+  Target,
+  MessageSquare,
+  TrendingUp,
+  Workflow
 } from "lucide-react"
 import { currentUser, notifications } from "@/lib/mock-data"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Formações", href: "/dashboard/trainings", icon: GraduationCap },
-  { name: "Calendário", href: "/dashboard/calendar", icon: Calendar },
+  { name: "Formacoes", href: "/dashboard/trainings", icon: GraduationCap },
+  { name: "Calendario", href: "/dashboard/calendar", icon: Calendar },
   { name: "Colaboradores", href: "/dashboard/employees", icon: Users },
-  { name: "Matriz de Talento", href: "/dashboard/talent-matrix", icon: Sparkles },
-  { name: "Matriz de Competências", href: "/dashboard/skills-matrix", icon: BarChart3 },
-  { name: "Certificações", href: "/dashboard/certifications", icon: Award },
-  { name: "Relatórios", href: "/dashboard/reports", icon: BarChart3 },
-  { name: "Documentos", href: "/dashboard/documents", icon: FileText },
+  { name: "Onboarding", href: "/dashboard/onboarding", icon: UserPlus },
+  { name: "PDI", href: "/dashboard/pdi", icon: Target },
+  { name: "Avaliacoes 360", href: "/dashboard/evaluations", icon: MessageSquare },
+  { name: "Analytics RH", href: "/dashboard/hr-analytics", icon: TrendingUp },
+  { name: "Talent Flow", href: "/dashboard/talent-flow", icon: Workflow },
 ]
 
 const bottomNav = [
