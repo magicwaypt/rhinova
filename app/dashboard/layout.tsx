@@ -49,6 +49,7 @@ import {
   type LucideIcon
 } from "lucide-react"
 import { currentUser, notifications } from "@/lib/mock-data"
+import { AIChatWidget } from "@/components/ai-chat-widget"
 
 interface NavItem {
   name: string
@@ -84,38 +85,38 @@ const modules: NavModule[] = [
     ]
   },
   {
-    name: "Formação",
+    name: "Formacao",
     icon: GraduationCap,
     items: [
-      { name: "Catálogo", href: "/dashboard/trainings", icon: BookOpen },
-      { name: "Calendário", href: "/dashboard/calendar", icon: Calendar },
-      { name: "Certificações", href: "/dashboard/certifications", icon: Award },
+      { name: "Catalogo", href: "/dashboard/trainings", icon: BookOpen },
+      { name: "Calendario", href: "/dashboard/calendar", icon: Calendar },
+      { name: "Certificacoes", href: "/dashboard/certifications", icon: Award },
     ]
   },
   {
-    name: "Avaliação & Desempenho",
+    name: "Avaliacao",
     icon: Target,
     items: [
-      { name: "Avaliações 360", href: "/dashboard/evaluations", icon: MessageSquare },
+      { name: "Avaliacoes 360", href: "/dashboard/evaluations", icon: MessageSquare },
       { name: "PDI", href: "/dashboard/pdi", icon: Target },
     ]
   },
   {
-    name: "Gestão de Talento",
+    name: "Talento",
     icon: Users,
     items: [
       { name: "Colaboradores", href: "/dashboard/employees", icon: Users },
       { name: "Talent Flow", href: "/dashboard/talent-flow", icon: Workflow },
-      { name: "Matriz de Talento", href: "/dashboard/talent-matrix", icon: Sparkles },
-      { name: "Competências", href: "/dashboard/skills-matrix", icon: BarChart3 },
+      { name: "Matriz Talento", href: "/dashboard/talent-matrix", icon: Sparkles },
+      { name: "Competencias", href: "/dashboard/skills-matrix", icon: BarChart3 },
     ]
   },
   {
-    name: "HR Analytics",
+    name: "Analytics",
     icon: LineChart,
     items: [
       { name: "Dashboards", href: "/dashboard/hr-analytics", icon: TrendingUp },
-      { name: "Relatórios", href: "/dashboard/reports", icon: FileBarChart },
+      { name: "Relatorios", href: "/dashboard/reports", icon: FileBarChart },
     ]
   },
 ]
@@ -250,24 +251,6 @@ export default function DashboardLayout({
               />
             ))}
           </nav>
-
-          {/* AI Feature Banner */}
-          <div className="px-3 mb-4">
-            <div className="p-3 rounded-lg bg-gradient-to-br from-accent/15 via-accent/10 to-primary/10 border border-accent/30">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-                  <Sparkles className="w-3.5 h-3.5 text-accent" />
-                </div>
-                <span className="text-xs font-semibold text-sidebar-foreground">IA Ativa</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                3 recomendações personalizadas disponíveis.
-              </p>
-              <Button size="sm" className="w-full text-xs h-7 bg-accent hover:bg-accent/90 text-accent-foreground">
-                Ver Sugestões
-              </Button>
-            </div>
-          </div>
 
           {/* Bottom navigation */}
           <div className="px-3 pb-4 border-t border-sidebar-border pt-4">
@@ -419,6 +402,9 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* AI Chat Widget */}
+      <AIChatWidget />
     </div>
   )
 }
