@@ -46,6 +46,13 @@ import {
   BookOpen,
   LineChart,
   FileBarChart,
+  Radar,
+  Brain,
+  Globe,
+  Database,
+  Mail,
+  Building2,
+  PieChart,
   type LucideIcon
 } from "lucide-react"
 import { currentUser, notifications } from "@/lib/mock-data"
@@ -70,10 +77,18 @@ const modules: NavModule[] = [
     icon: Briefcase,
     defaultOpen: true,
     items: [
+      { name: "AI Talent Hub", href: "/dashboard/recruitment", icon: Sparkles },
       { name: "Vagas", href: "/dashboard/jobs", icon: ClipboardList },
       { name: "Candidatos", href: "/dashboard/candidates", icon: UserSearch },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: GitBranch },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Bot },
+      { name: "AI Sourcing", href: "/dashboard/recruitment/sourcing", icon: Radar },
+      { name: "Candidate Intel", href: "/dashboard/recruitment/candidate-intelligence", icon: Brain },
+      { name: "Semantic Search", href: "/dashboard/recruitment/semantic-search", icon: Globe },
+      { name: "Talent Database", href: "/dashboard/recruitment/talent-database", icon: Database },
+      { name: "AI Outreach", href: "/dashboard/recruitment/outreach", icon: Mail },
+      { name: "Market Intel", href: "/dashboard/recruitment/market-intelligence", icon: Building2 },
+      { name: "Recruitment Analytics", href: "/dashboard/recruitment/analytics", icon: PieChart },
     ]
   },
   {
