@@ -30,26 +30,153 @@ import {
   LogOut,
   User,
   ChevronRight,
+  ChevronDown,
   Award,
-  Sparkles
+  Sparkles,
+  UserPlus,
+  Target,
+  MessageSquare,
+  TrendingUp,
+  Workflow,
+  Briefcase,
+  UserSearch,
+  GitBranch,
+  Bot,
+  ClipboardList,
+  BookOpen,
+  LineChart,
+  FileBarChart,
+  type LucideIcon
 } from "lucide-react"
 import { currentUser, notifications } from "@/lib/mock-data"
+import { AIChatWidget } from "@/components/ai-chat-widget"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Formações", href: "/dashboard/trainings", icon: GraduationCap },
-  { name: "Calendário", href: "/dashboard/calendar", icon: Calendar },
-  { name: "Colaboradores", href: "/dashboard/employees", icon: Users },
-  { name: "Matriz de Talento", href: "/dashboard/talent-matrix", icon: Sparkles },
-  { name: "Matriz de Competências", href: "/dashboard/skills-matrix", icon: BarChart3 },
-  { name: "Certificações", href: "/dashboard/certifications", icon: Award },
-  { name: "Relatórios", href: "/dashboard/reports", icon: BarChart3 },
-  { name: "Documentos", href: "/dashboard/documents", icon: FileText },
+interface NavItem {
+  name: string
+  href: string
+  icon: LucideIcon
+}
+
+interface NavModule {
+  name: string
+  icon: LucideIcon
+  items: NavItem[]
+  defaultOpen?: boolean
+}
+
+const modules: NavModule[] = [
+  {
+    name: "Recrutamento",
+    icon: Briefcase,
+    defaultOpen: true,
+    items: [
+      { name: "Vagas", href: "/dashboard/jobs", icon: ClipboardList },
+      { name: "Candidatos", href: "/dashboard/candidates", icon: UserSearch },
+      { name: "Pipeline", href: "/dashboard/pipeline", icon: GitBranch },
+      { name: "AI Agents", href: "/dashboard/ai-agents", icon: Bot },
+    ]
+  },
+  {
+    name: "Onboarding",
+    icon: UserPlus,
+    items: [
+      { name: "Em Curso", href: "/dashboard/onboarding", icon: UserPlus },
+      { name: "Templates", href: "/dashboard/onboarding/templates", icon: FileText },
+    ]
+  },
+  {
+    name: "Formacao",
+    icon: GraduationCap,
+    items: [
+      { name: "Catalogo", href: "/dashboard/trainings", icon: BookOpen },
+      { name: "Calendario", href: "/dashboard/calendar", icon: Calendar },
+      { name: "Certificacoes", href: "/dashboard/certifications", icon: Award },
+    ]
+  },
+  {
+    name: "Avaliacao",
+    icon: Target,
+    items: [
+      { name: "Avaliacoes 360", href: "/dashboard/evaluations", icon: MessageSquare },
+      { name: "PDI", href: "/dashboard/pdi", icon: Target },
+    ]
+  },
+  {
+    name: "Talento",
+    icon: Users,
+    items: [
+      { name: "Colaboradores", href: "/dashboard/employees", icon: Users },
+      { name: "Talent Flow", href: "/dashboard/talent-flow", icon: Workflow },
+      { name: "Matriz Talento", href: "/dashboard/talent-matrix", icon: Sparkles },
+      { name: "Competencias", href: "/dashboard/skills-matrix", icon: BarChart3 },
+    ]
+  },
+  {
+    name: "Analytics",
+    icon: LineChart,
+    items: [
+      { name: "Dashboards", href: "/dashboard/hr-analytics", icon: TrendingUp },
+      { name: "Relatorios", href: "/dashboard/reports", icon: FileBarChart },
+    ]
+  },
 ]
 
 const bottomNav = [
-  { name: "Definicoes", href: "/dashboard/settings", icon: Settings },
+  { name: "Definições", href: "/dashboard/settings", icon: Settings },
 ]
+
+function NavModuleSection({ module, pathname }: { module: NavModule; pathname: string }) {
+  const hasActiveItem = module.items.some(item => 
+    pathname === item.href || pathname.startsWith(item.href + "/")
+  )
+  const [isOpen, setIsOpen] = useState(module.defaultOpen || hasActiveItem)
+
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+          hasActiveItem 
+            ? "text-sidebar-foreground bg-sidebar-accent/50" 
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <module.icon className="w-4 h-4" />
+          <span>{module.name}</span>
+        </div>
+        <ChevronDown className={cn(
+          "w-4 h-4 transition-transform duration-200",
+          isOpen ? "rotate-0" : "-rotate-90"
+        )} />
+      </button>
+      
+      {isOpen && (
+        <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+          {module.items.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium" 
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function DashboardLayout({
   children,
@@ -63,7 +190,6 @@ export default function DashboardLayout({
   const router = usePathname && typeof window !== 'undefined' ? require('next/navigation').useRouter() : null;
 
   const handleLogout = () => {
-    // Aqui você pode adicionar lógica de limpeza de sessão/localStorage se necessário
     if (router) router.push('/');
   };
 
@@ -99,46 +225,32 @@ export default function DashboardLayout({
             </button>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || 
-                (item.href !== "/dashboard" && pathname.startsWith(item.href))
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    isActive 
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground" 
-                      : "text-sidebar-foreground hover:bg-sidebar-accent"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* AI Feature Banner */}
-          <div className="px-3 mb-4">
-            <div className="p-3 rounded-lg bg-gradient-to-br from-accent/15 via-accent/10 to-primary/10 border border-accent/30">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-                  <Sparkles className="w-3.5 h-3.5 text-accent" />
-                </div>
-                <span className="text-xs font-semibold text-sidebar-foreground">IA Ativa</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                3 recomendacoes personalizadas disponiveis.
-              </p>
-              <Button size="sm" className="w-full text-xs h-7 bg-accent hover:bg-accent/90 text-accent-foreground">
-                Ver Sugestoes
-              </Button>
-            </div>
+          {/* Dashboard Link */}
+          <div className="px-3 pt-4 pb-2">
+            <Link
+              href="/dashboard"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                pathname === "/dashboard"
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground" 
+                  : "text-sidebar-foreground hover:bg-sidebar-accent"
+              )}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              Dashboard
+            </Link>
           </div>
+
+          {/* Module Navigation */}
+          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+            {modules.map((module) => (
+              <NavModuleSection 
+                key={module.name} 
+                module={module} 
+                pathname={pathname} 
+              />
+            ))}
+          </nav>
 
           {/* Bottom navigation */}
           <div className="px-3 pb-4 border-t border-sidebar-border pt-4">
@@ -210,12 +322,12 @@ export default function DashboardLayout({
                         {unreadNotifications}
                       </span>
                     )}
-                    <span className="sr-only">Notificacoes</span>
+                    <span className="sr-only">Notificações</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel className="flex items-center justify-between">
-                    Notificacoes
+                    Notificações
                     <Badge variant="secondary">{unreadNotifications} novas</Badge>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -235,7 +347,7 @@ export default function DashboardLayout({
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="justify-center text-primary">
-                    Ver todas as notificacoes
+                    Ver todas as notificações
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -266,7 +378,7 @@ export default function DashboardLayout({
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Settings className="w-4 h-4 mr-2" />
-                    Definicoes
+                    Definições
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-destructive">
@@ -290,6 +402,9 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* AI Chat Widget */}
+      <AIChatWidget />
     </div>
   )
 }
