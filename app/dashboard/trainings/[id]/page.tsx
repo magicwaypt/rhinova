@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
-import type { RuTableKey, TrainingActionRecord, TrainingParticipantStatus } from "@/lib/training-platform"
+import type { RuTableKey } from "@/lib/training-platform"
 import {
   getEmployeeRuMissingFields,
   getRuLabel,
@@ -68,13 +68,6 @@ import {
   trainingTestingGuide,
   useTrainingWorkspace,
 } from "@/lib/training-platform"
-
-const statusStyles: Record<TrainingActionRecord["status"], string> = {
-  scheduled: "bg-primary/15 text-primary",
-  in_progress: "bg-amber-100 text-amber-700",
-  completed: "bg-emerald-100 text-emerald-700",
-  cancelled: "bg-rose-100 text-rose-700",
-}
 
 const participantStatusStyles = {
   confirmed: "bg-blue-100 text-blue-700",
@@ -253,67 +246,94 @@ export default function TrainingDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard/trainings">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold sm:text-3xl">{training.title}</h1>
-            <p className="text-muted-foreground">Vista operacional da sessão com validação RU em tempo real.</p>
-          </div>
-        </div>
+      <Button variant="ghost" size="sm" className="rounded-full" asChild>
+        <Link href="/dashboard/trainings">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar ao catálogo
+        </Link>
+      </Button>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/dashboard/trainings/${training.id}/edit`}>
-              <Edit className="mr-2 h-4 w-4" />
-              Editar
-            </Link>
-          </Button>
-          <Button variant="outline" onClick={handleDuplicate}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicar
-          </Button>
-          <Button onClick={handleExportRu} disabled={!validation?.eligible}>
-            <FileJson className="mr-2 h-4 w-4" />
-            Exportar RU
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/calendar">
-                  <CalendarDays className="mr-2 h-4 w-4" />
-                  Ver no calendario
+      <Card className="relative overflow-hidden border-none bg-mesh-brand text-white shadow-soft-lg">
+        <div className="pointer-events-none absolute inset-0 bg-grid-faint opacity-[0.18]" />
+        <CardContent className="relative flex flex-col gap-6 p-6 lg:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="border border-white/25 bg-white/15 text-white hover:bg-white/20">
+                  {trainingStatusLabels[training.status]}
+                </Badge>
+                <Badge
+                  className={
+                    validation?.eligible
+                      ? "border border-white/25 bg-white/90 text-primary hover:bg-white"
+                      : "border border-white/25 bg-white/15 text-white hover:bg-white/20"
+                  }
+                >
+                  {validation?.eligible ? "Elegível RU" : "Por validar RU"}
+                </Badge>
+                {training.mandatory && (
+                  <Badge className="border border-white/25 bg-accent text-accent-foreground hover:bg-accent">Obrigatória</Badge>
+                )}
+              </div>
+              <div>
+                <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">{training.title}</h1>
+                <p className="mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-white/80 sm:text-base">
+                  {training.description || "Vista operacional da sessão com validação RU em tempo real."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20" asChild>
+                <Link href={`/dashboard/trainings/${training.id}/edit`}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+              </Button>
+              <Button variant="outline" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={handleDuplicate}>
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicar
+              </Button>
+              <Button className="rounded-full bg-white text-primary shadow-soft hover:bg-white/90" onClick={handleExportRu} disabled={!validation?.eligible}>
+                <FileJson className="mr-2 h-4 w-4" />
+                Exportar RU
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/calendar">
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      Ver no calendario
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
 
-      <Card className="overflow-hidden">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <HeroStat label="Data" value={new Date(training.startDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })} />
+            <HeroStat label="Duração" value={`${training.durationHours}h`} />
+            <HeroStat label="Formador" value={training.instructor} />
+            <HeroStat label="Participantes" value={`${participants.length}/${training.maxParticipants}`} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden shadow-soft">
         <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Badge className={statusStyles[training.status]}>{trainingStatusLabels[training.status]}</Badge>
-              <Badge variant={validation?.eligible ? "secondary" : "destructive"}>
-                {validation?.eligible ? "Elegível RU" : "Por validar RU"}
-              </Badge>
-              {training.mandatory && <Badge variant="destructive">Obrigatoria</Badge>}
               {training.targetDepartments?.length
                 ? training.targetDepartments.map((department) => (
                     <Badge key={department} variant="secondary">{department}</Badge>
@@ -321,8 +341,8 @@ export default function TrainingDetailPage({
                 : training.department && <Badge variant="secondary">{training.department}</Badge>}
             </div>
             <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Resumo da acao</p>
-              <p className="mt-2 text-base text-muted-foreground">{training.description}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Classificação RU</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Códigos oficiais aplicados a esta ação de formação.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <MetricTile label="T30" value={`${training.educationAreaCode} · ${getRuLabel("T30", training.educationAreaCode)}`} />
@@ -335,12 +355,12 @@ export default function TrainingDetailPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <MetricTile label="Data" value={new Date(training.startDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })} />
-            <MetricTile label="Duracao" value={`${training.durationHours}h`} />
             <MetricTile label="Tipo" value={training.isInternal ? "Interna" : "Externa"} />
-            <MetricTile label="Formador" value={training.instructor} />
             <MetricTile label="Local" value={training.location || "A definir"} />
-            <MetricTile label="Participantes" value={`${participants.length}/${training.maxParticipants}`} />
+            <MetricTile label="Data de início" value={new Date(training.startDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })} />
+            <MetricTile label="Duração" value={`${training.durationHours}h`} />
+            <MetricTile label="Formador" value={training.instructor} />
+            <MetricTile label="Lotação" value={`${participants.length}/${training.maxParticipants}`} />
           </div>
         </CardContent>
       </Card>
@@ -718,11 +738,20 @@ export default function TrainingDetailPage({
   )
 }
 
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+      <p className="text-xs uppercase tracking-[0.16em] text-white/65">{label}</p>
+      <p className="mt-1.5 truncate font-semibold text-white">{value}</p>
+    </div>
+  )
+}
+
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-secondary/20 p-4">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 font-semibold">{value}</p>
+    <div className="rounded-2xl border bg-secondary/30 p-4 transition-colors hover:border-primary/30 hover:bg-secondary/50">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 font-semibold text-foreground">{value}</p>
     </div>
   )
 }
@@ -739,15 +768,15 @@ function MetricSummary({
   icon: typeof Users
 }) {
   return (
-    <Card>
+    <Card className="overflow-hidden shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-soft-lg">
       <CardContent className="flex items-center gap-4 p-5">
-        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-soft">
           <Icon className="h-5 w-5" />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold">{value}</p>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <p className="text-2xl font-bold tracking-tight">{value}</p>
+          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </CardContent>
     </Card>

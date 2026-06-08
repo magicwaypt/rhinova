@@ -414,19 +414,20 @@ export default function TrainingsPage() {
         onChange={handleProvidersImport}
       />
 
-      <Card className="overflow-hidden border-none bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_45%,#bfdbfe_100%)] text-white">
-        <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+      <Card className="relative overflow-hidden border-none bg-mesh-brand text-white shadow-soft-lg">
+        <div className="pointer-events-none absolute inset-0 bg-grid-faint opacity-[0.18]" />
+        <CardContent className="relative grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
           <div className="space-y-4">
-            <Badge className="w-fit bg-white/15 text-white hover:bg-white/15">Módulo de Formação</Badge>
+            <Badge className="w-fit border border-white/25 bg-white/15 text-white hover:bg-white/20">Módulo de Formação</Badge>
             <div>
-              <h1 className="text-3xl font-bold sm:text-4xl">Crie a operação real da formação.</h1>
-              <p className="mt-3 max-w-2xl text-sm text-white/80 sm:text-base">
+              <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">Crie a operação real da formação.</h1>
+              <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-white/80 sm:text-base">
                 Importe colaboradores a partir do Excel, organize entidades formadoras, registe ações e exporte os
                 mapas quando precisar.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button asChild className="bg-white text-slate-900 hover:bg-white/90">
+              <Button asChild className="bg-white text-primary shadow-soft hover:bg-white/90">
                 <Link href="/dashboard/trainings/new">
                   <Plus className="mr-2 h-4 w-4" />
                   Nova formação
@@ -435,13 +436,13 @@ export default function TrainingsPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="border-white/30 bg-white/10 text-white hover:bg-white/15"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
                 onClick={() => employeeImportInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Importar Excel
               </Button>
-              <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/15">
+              <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
                 <Link href="/dashboard/calendar">
                   <CalendarDays className="mr-2 h-4 w-4" />
                   Abrir calendário
@@ -450,9 +451,9 @@ export default function TrainingsPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/60">Resumo atual</p>
+          <div className="grid gap-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+            <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/65">Resumo atual</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <SummaryStat label="Formações" value={String(state.trainings.length)} />
                 <SummaryStat label="Colaboradores" value={String(state.employees.length)} />
@@ -605,22 +606,22 @@ export default function TrainingsPage() {
                   catálogo, calendário, progresso e exportações.
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent className="w-full">
+              <EmptyContent className="w-full max-w-4xl">
                 <div className="flex flex-wrap justify-center gap-3">
-                  <Button onClick={() => employeeImportInputRef.current?.click()}>
+                  <Button className="rounded-full" onClick={() => employeeImportInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" />
                     Importar colaboradores
                   </Button>
-                  <Button variant="outline" onClick={openCreateProviderDialog}>
+                  <Button variant="outline" className="rounded-full" onClick={openCreateProviderDialog}>
                     <Building2 className="mr-2 h-4 w-4" />
                     Criar entidade formadora
                   </Button>
-                  <Button asChild variant="outline">
+                  <Button asChild variant="outline" className="rounded-full">
                     <Link href="/dashboard/trainings/new">Criar formação</Link>
                   </Button>
                 </div>
 
-                <div className="grid w-full gap-4 xl:grid-cols-2">
+                <div className="grid w-full gap-4 md:grid-cols-2">
                   {setupSteps.map((step, index) => {
                     const Icon = step.icon
 
@@ -633,27 +634,27 @@ export default function TrainingsPage() {
                     }
 
                     return (
-                      <div key={step.id} className="rounded-3xl border bg-gradient-to-br from-white to-slate-50 p-6 text-left shadow-sm">
+                      <div key={step.id} className="group rounded-3xl border bg-card p-6 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-soft-lg">
                         <div className="flex items-start justify-between gap-4">
                           <div className="space-y-3">
-                            <Badge variant="outline">Passo {index + 1}</Badge>
+                            <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">Passo {index + 1}</Badge>
                             <div>
-                              <p className="text-lg font-semibold text-slate-900">{step.title}</p>
-                              <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
+                              <p className="text-lg font-semibold text-foreground">{step.title}</p>
+                              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.description}</p>
                             </div>
                           </div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-soft transition-transform group-hover:scale-105">
                             <Icon className="h-5 w-5" />
                           </div>
                         </div>
 
                         <div className="mt-6">
                           {step.href ? (
-                            <Button asChild variant="outline">
+                            <Button asChild variant="outline" className="rounded-full">
                               <Link href={step.href}>{step.actionLabel}</Link>
                             </Button>
                           ) : (
-                            <Button variant="outline" onClick={handleClick}>
+                            <Button variant="outline" className="rounded-full" onClick={handleClick}>
                               {step.actionLabel}
                             </Button>
                           )}
@@ -669,24 +670,27 @@ export default function TrainingsPage() {
       ) : (
         <>
           <div className="grid gap-4 xl:grid-cols-3">
-            <Card className="border-slate-200">
+            <Card className="overflow-hidden border-border shadow-soft transition-shadow hover:shadow-soft-lg">
               <CardHeader>
+                <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Building2 className="h-5 w-5" />
+                </div>
                 <CardTitle>Entidades formadoras</CardTitle>
                 <CardDescription>Crie ou importe o diretório de parceiros e centros de formação.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border bg-slate-50 p-4">
-                  <p className="text-3xl font-semibold">{state.trainingProviders.length}</p>
+                <div className="rounded-2xl border bg-secondary/40 p-4">
+                  <p className="text-3xl font-bold tracking-tight">{state.trainingProviders.length}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {state.trainingProviders.length === 1 ? "entidade registada" : "entidades registadas"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={openCreateProviderDialog}>
+                  <Button onClick={openCreateProviderDialog} className="rounded-full">
                     <Plus className="mr-2 h-4 w-4" />
                     Nova entidade
                   </Button>
-                  <Button variant="outline" onClick={() => providerImportInputRef.current?.click()}>
+                  <Button variant="outline" className="rounded-full" onClick={() => providerImportInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" />
                     Importar lista
                   </Button>
@@ -694,21 +698,24 @@ export default function TrainingsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200">
+            <Card className="overflow-hidden border-border shadow-soft transition-shadow hover:shadow-soft-lg">
               <CardHeader>
+                <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent-foreground">
+                  <Users className="h-5 w-5" />
+                </div>
                 <CardTitle>Colaboradores</CardTitle>
                 <CardDescription>Importe a lista do Excel ou crie manualmente os primeiros registos.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border bg-slate-50 p-4">
-                  <p className="text-3xl font-semibold">{state.employees.length}</p>
+                <div className="rounded-2xl border bg-secondary/40 p-4">
+                  <p className="text-3xl font-bold tracking-tight">{state.employees.length}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {state.employees.length === 1 ? "colaborador disponível" : "colaboradores disponíveis"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <DialogTriggerButton onClick={() => setEmployeeDialogOpen(true)} label="Novo colaborador" icon={UserPlus} />
-                  <Button variant="outline" onClick={() => employeeImportInputRef.current?.click()}>
+                  <Button variant="outline" className="rounded-full" onClick={() => employeeImportInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" />
                     Importar ficheiro
                   </Button>
@@ -716,17 +723,20 @@ export default function TrainingsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200">
+            <Card className="overflow-hidden border-border shadow-soft transition-shadow hover:shadow-soft-lg">
               <CardHeader>
+                <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-success/10 text-success">
+                  <Download className="h-5 w-5" />
+                </div>
                 <CardTitle>Exportações</CardTitle>
                 <CardDescription>Leve o mapa global e o resumo por colaborador para reporting.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start" onClick={() => downloadCsvFile("mapa-formacoes.csv", buildTrainingMapExport())}>
+                <Button variant="outline" className="w-full justify-start rounded-xl" onClick={() => downloadCsvFile("mapa-formacoes.csv", buildTrainingMapExport())}>
                   <Download className="mr-2 h-4 w-4" />
                   Exportar mapa de formações
                 </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => downloadCsvFile("formacoes-por-colaborador.csv", buildEmployeeTrainingExport())}>
+                <Button variant="outline" className="w-full justify-start rounded-xl" onClick={() => downloadCsvFile("formacoes-por-colaborador.csv", buildEmployeeTrainingExport())}>
                   <Download className="mr-2 h-4 w-4" />
                   Exportar formações por colaborador
                 </Button>
@@ -761,19 +771,20 @@ export default function TrainingsPage() {
                   </div>
                 )}
                 {filteredTrainings.map((training) => (
-                  <div key={training.id} className="rounded-2xl border p-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div key={training.id} className="group relative overflow-hidden rounded-2xl border bg-card p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-soft-lg">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-brand opacity-70 transition-opacity group-hover:opacity-100" />
+                    <div className="flex flex-col gap-4 pl-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-semibold">{training.title}</p>
                           <Badge variant="outline">{trainingFormatLabels[training.format]}</Badge>
                           <Badge variant="secondary">{trainingStatusLabels[training.status]}</Badge>
-                          {training.mandatory && <Badge>Obrigatória</Badge>}
+                          {training.mandatory && <Badge className="bg-accent text-accent-foreground hover:bg-accent">Obrigatória</Badge>}
                         </div>
                         <p className="text-sm text-muted-foreground">{training.description || "Sem descrição."}</p>
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span>{training.currentParticipants}/{training.maxParticipants} participantes</span>
-                          <span>{training.durationHours}h</span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{training.currentParticipants}/{training.maxParticipants} participantes</span>
+                          <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{training.durationHours}h</span>
                           <span>{training.instructor}</span>
                           <span>
                             {training.targetDepartments?.length
@@ -784,13 +795,13 @@ export default function TrainingsPage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" asChild>
+                        <Button size="sm" variant="outline" className="rounded-full" asChild>
                           <Link href={`/dashboard/trainings/${training.id}`}>
                             <Eye className="mr-2 h-4 w-4" />
                             Abrir
                           </Link>
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteTraining(training.id)}>
+                        <Button size="sm" variant="ghost" className="rounded-full" onClick={() => handleDeleteTraining(training.id)}>
                           <Trash2 className="mr-2 h-4 w-4 text-destructive" />
                           Apagar
                         </Button>
