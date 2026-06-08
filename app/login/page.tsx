@@ -175,6 +175,23 @@ export default function LoginPage() {
                 <div className="mt-6 rounded-2xl border bg-secondary/20 p-4 text-sm text-muted-foreground">
                   O acesso é atribuído pela administração da plataforma. Se ainda não tem conta, peça ativação ao seu responsável.
                 </div>
+
+                {loginError && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        window.localStorage.clear()
+                      } catch {
+                        // ignore
+                      }
+                      window.location.reload()
+                    }}
+                    className="mt-3 w-full text-center text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    Continua sem conseguir entrar? Limpar dados locais e tentar de novo.
+                  </button>
+                )}
               </CardContent>
             </Card>
           </div>
