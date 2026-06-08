@@ -103,6 +103,20 @@ export function getSessionMaxAge(remember: boolean) {
   return remember ? REMEMBER_SESSION_TTL_SECONDS : DEFAULT_SESSION_TTL_SECONDS
 }
 
+// The app preview runs inside a cross-origin iframe, so the session cookie must
+// use SameSite=None + Secure to be accepted and sent back on subsequent
+// requests. Without this, the cookie is silently dropped and /api/auth/me
+// returns 401 right after a successful login.
+export function getSessionCookieOptions(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: "none" as const,
+    secure: true,
+    path: "/",
+    maxAge,
+  }
+}
+
 export function createSessionToken(email: string, maxAgeSeconds: number) {
   const now = Math.floor(Date.now() / 1000)
   const payload: SessionPayload = {
