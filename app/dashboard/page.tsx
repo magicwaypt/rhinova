@@ -1,507 +1,190 @@
 "use client"
 
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ArrowRight, BookOpen, Building2, CalendarDays, Plus, Shield, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { 
-  GraduationCap, 
-  Clock, 
-  Users, 
-  Award,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CalendarDays,
-  ArrowRight,
-  CheckCircle2,
-  XCircle,
-  MoreHorizontal,
-  Plus,
-  ShieldCheck,
-  Target,
-  Wallet,
-  UserX,
-  FileWarning,
-  AlertCircle
-} from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { 
-  dashboardStats, 
-  trainings, 
-  complianceMetrics, 
-  notifications,
-  complianceByDepartment,
-  trainingTrendData,
-  hrComplianceMetrics
-} from "@/lib/mock-data"
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell
-} from "recharts"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { useAccessManagement } from "@/components/providers/access-management-provider"
+import { useTrainingWorkspace } from "@/lib/training-platform"
 
 export default function DashboardPage() {
-  // Cards simples e diretos ao ponto
-  const statCards = [
-    {
-      title: "Formacoes Ativas",
-      value: String(dashboardStats.activeTrainings),
-      subtitle: "A decorrer este mes",
-      icon: GraduationCap,
-      color: "bg-blue-500",
-      lightBg: "bg-blue-50"
-    },
-    {
-      title: "Colaboradores",
-      value: String(hrComplianceMetrics.totalEmployees),
-      subtitle: `${hrComplianceMetrics.employeesWithAllMandatory} com formacoes em dia`,
-      icon: Users,
-      color: "bg-emerald-500",
-      lightBg: "bg-emerald-50"
-    },
-    {
-      title: "Certificacoes",
-      value: String(hrComplianceMetrics.totalActiveCertifications),
-      subtitle: `${hrComplianceMetrics.expiringSoon} a renovar em breve`,
-      icon: Award,
-      color: "bg-amber-500",
-      lightBg: "bg-amber-50"
-    },
-    {
-      title: "Horas de Formacao",
-      value: String(hrComplianceMetrics.hoursCompletedThisYear),
-      subtitle: `Media ${hrComplianceMetrics.avgHoursPerEmployee}h por colaborador`,
-      icon: Clock,
-      color: "bg-violet-500",
-      lightBg: "bg-violet-50"
-    }
-  ]
-  const upcomingTrainings = trainings
-    .filter(t => t.status === "scheduled" || t.status === "in_progress")
-    .slice(0, 4)
+  const { currentUser, currentUserEntities, isReady: accessReady, isSuperAdmin, state: accessState } = useAccessManagement()
+  const { state: trainingState, isReady: trainingReady, pendingTasks } = useTrainingWorkspace()
 
-  const recentNotifications = notifications.filter(n => !n.read).slice(0, 3)
+  if (!accessReady || !trainingReady) {
+    return <div className="h-[520px] rounded-3xl bg-muted animate-pulse" />
+  }
+
+  const hasPlatformData = accessState.entities.length > 0 || accessState.users.length > 1
+  const hasTrainingData = trainingState.trainings.length > 0 || trainingState.employees.length > 0
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Bem-vinda de volta, Maria. Aqui esta o resumo da sua organizacao.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/reports">
-              Ver Relatorios
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard/trainings/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Formacao
-            </Link>
-          </Button>
-        </div>
+      <Card className="overflow-hidden border-none bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_52%,#dbeafe_100%)] text-white">
+        <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-end lg:justify-between lg:p-8">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/70">Rhinova</p>
+            <h1 className="text-3xl font-bold sm:text-4xl">Plataforma pronta para configurar, sem dados demo.</h1>
+            <p className="text-sm text-white/80 sm:text-base">
+              {isSuperAdmin
+                ? "Comece por criar a sua primeira entidade, configurar utilizadores e montar as primeiras ações de formação. A plataforma mostra conteúdo real à medida que o vai introduzindo."
+                : `Está a entrar como ${currentUser?.name || "utilizador"} com acesso operacional. Aqui vê apenas o contexto real da(s) entidade(s) a que está associado.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {isSuperAdmin && (
+              <Button asChild className="bg-white text-slate-900 hover:bg-white/90">
+                <Link href="/dashboard/settings">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Configurar plataforma
+                </Link>
+              </Button>
+            )}
+            <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/15">
+              <Link href="/dashboard/trainings/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Criar formação
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Entidades" value={String(accessState.entities.length)} description="Tenants configurados" icon={Building2} />
+        <MetricCard title={isSuperAdmin ? "Users" : "Entidades acessíveis"} value={String(isSuperAdmin ? accessState.users.length : currentUserEntities.length)} description={isSuperAdmin ? "Acessos de plataforma" : "Âmbito do seu acesso"} icon={Users} />
+        <MetricCard title="Formações" value={String(trainingState.trainings.length)} description="Ações registadas" icon={BookOpen} />
+        <MetricCard title="Tarefas pendentes" value={String(pendingTasks.length)} description="Acompanhar execução" icon={CalendarDays} />
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, i) => (
-          <Card key={i} className="overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{stat.subtitle}</p>
-                </div>
-                <div className={`w-12 h-12 rounded-xl ${stat.lightBg} flex items-center justify-center`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color.replace('bg-', 'text-')}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Main content grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Training trend chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle>Evolucao Mensal</CardTitle>
-              <CardDescription>Formacoes realizadas nos ultimos 6 meses</CardDescription>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-muted-foreground">Concluidas</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-muted-foreground">Planeadas</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trainingTrendData}>
-                  <defs>
-                    <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/>
-                    </linearGradient>
-                    <linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    width={30}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: "hsl(var(--card))", 
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
-                    }}
-                    labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="completed" 
-                    stroke="#3b82f6" 
-                    fillOpacity={1} 
-                    fill="url(#colorCompleted)" 
-                    strokeWidth={2.5}
-                    name="Concluidas"
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="scheduled" 
-                    stroke="#10b981" 
-                    fillOpacity={1} 
-                    fill="url(#colorScheduled)" 
-                    strokeWidth={2.5}
-                    name="Planeadas"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Compliance by department */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Compliance por Departamento</CardTitle>
-            <CardDescription>Taxa de conformidade e detalhes por equipa</CardDescription>
+            <CardTitle>{isSuperAdmin ? "Configuração da plataforma" : "O meu contexto"}</CardTitle>
+            <CardDescription>{isSuperAdmin ? "Base multi-tenant, acessos e governação." : "Resumo do acesso disponível para a sua sessão."}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {hrComplianceMetrics.departmentMetrics.map((dept, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{dept.department}</span>
-                      {dept.trend === 'up' && <TrendingUp className="w-3 h-3 text-accent" />}
-                      {dept.trend === 'down' && <TrendingDown className="w-3 h-3 text-destructive" />}
-                    </div>
-                    <span className={`font-medium ${
-                      dept.complianceRate >= 95 ? "text-accent" :
-                      dept.complianceRate >= 85 ? "text-warning" :
-                      "text-destructive"
-                    }`}>
-                      {dept.complianceRate}%
-                    </span>
-                  </div>
-                  <Progress 
-                    value={dept.complianceRate} 
-                    className="h-2"
-                  />
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{dept.compliantEmployees}/{dept.totalEmployees} colaboradores</span>
-                    <div className="flex items-center gap-3">
-                      {dept.pendingMandatory > 0 && (
-                        <span className="text-warning">{dept.pendingMandatory} pendentes</span>
-                      )}
-                      {dept.expiringCerts > 0 && (
-                        <span className="text-destructive">{dept.expiringCerts} a expirar</span>
-                      )}
-                    </div>
-                  </div>
+            {isSuperAdmin && !hasPlatformData ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Shield />
+                  </EmptyMedia>
+                  <EmptyTitle>Sem estrutura inicial</EmptyTitle>
+                  <EmptyDescription>
+                    Para começar, crie a primeira entidade e depois adicione os utilizadores que a vão gerir. Cada user pode ter permissões diferentes por entidade.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button asChild>
+                    <Link href="/dashboard/settings">
+                      Abrir administração
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            ) : isSuperAdmin ? (
+              <div className="space-y-3 text-sm">
+                <div className="rounded-2xl border p-4">
+                  <p className="font-medium">{accessState.entities.length} entidade(s) pronta(s)</p>
+                  <p className="mt-1 text-muted-foreground">Use a área de administração para editar tenants, definir passwords e ajustar memberships.</p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Compliance Alerts Section */}
-      <Card className="border-warning/30 bg-warning/5">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-warning/20 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-warning" />
-            </div>
-            <div>
-              <CardTitle className="text-lg">Alertas de Compliance</CardTitle>
-              <CardDescription>Acoes que requerem atencao imediata</CardDescription>
-            </div>
-          </div>
-          <Badge variant="destructive">{hrComplianceMetrics.criticalAlerts.filter(a => a.severity === 'critical').length} criticos</Badge>
-        </CardHeader>
-        <CardContent>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {hrComplianceMetrics.criticalAlerts.slice(0, 6).map((alert) => (
-              <div 
-                key={alert.id} 
-                className={`p-4 rounded-lg border bg-card ${
-                  alert.severity === 'critical' ? 'border-destructive/50' :
-                  alert.severity === 'warning' ? 'border-warning/50' :
-                  'border-border'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    alert.severity === 'critical' ? 'bg-destructive/20' :
-                    alert.severity === 'warning' ? 'bg-warning/20' :
-                    'bg-primary/20'
-                  }`}>
-                    {alert.type === 'expired_cert' && <FileWarning className={`w-4 h-4 ${alert.severity === 'critical' ? 'text-destructive' : 'text-warning'}`} />}
-                    {alert.type === 'low_compliance' && <TrendingDown className="w-4 h-4 text-warning" />}
-                    {alert.type === 'deadline_approaching' && <Clock className="w-4 h-4 text-warning" />}
-                    {alert.type === 'missing_mandatory' && <UserX className="w-4 h-4 text-warning" />}
-                    {alert.type === 'budget_exceeded' && <Wallet className="w-4 h-4 text-primary" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium">{alert.title}</h4>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {alert.description}
-                    </p>
-                    {alert.affectedCount > 0 && (
-                      <Badge variant="secondary" className="mt-2 text-xs">
-                        {alert.affectedCount} {alert.affectedCount === 1 ? 'afetado' : 'afetados'}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full mt-3 text-xs"
-                  asChild
-                >
-                  <Link href={alert.actionUrl || '#'}>
-                    Resolver
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </Link>
+                <Button asChild variant="outline">
+                  <Link href="/dashboard/settings">Gerir entidades e users</Link>
                 </Button>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Second row */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Upcoming trainings */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Proximas Formacoes</CardTitle>
-              <CardDescription>Sessoes agendadas para os proximos dias</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/trainings">
-                Ver todas
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {upcomingTrainings.map((training) => (
-                <div 
-                  key={training.id} 
-                  className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
-                >
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    training.status === "in_progress" 
-                      ? "bg-accent/20" 
-                      : "bg-primary/20"
-                  }`}>
-                    <GraduationCap className={`w-6 h-6 ${
-                      training.status === "in_progress" 
-                        ? "text-accent" 
-                        : "text-primary"
-                    }`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium truncate">{training.title}</h4>
-                      {training.mandatory && (
-                        <Badge variant="destructive" className="text-xs">
-                          Obrigatoria
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      <span className="flex items-center gap-1">
-                        <CalendarDays className="w-3 h-3" />
-                        {new Date(training.startDate).toLocaleDateString('pt-PT', { 
-                          day: 'numeric', 
-                          month: 'short' 
-                        })}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {training.duration}h
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {training.currentParticipants}/{training.maxParticipants}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge variant={
-                    training.status === "in_progress" ? "default" : "secondary"
-                  }>
-                    {training.status === "in_progress" ? "Em curso" : "Agendada"}
-                  </Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Ver detalhes</DropdownMenuItem>
-                      <DropdownMenuItem>Editar</DropdownMenuItem>
-                      <DropdownMenuItem>Gerir participantes</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            ) : (
+              <div className="space-y-3 text-sm">
+                <div className="rounded-2xl border p-4">
+                  <p className="font-medium">{currentUserEntities.length} entidade(s) acessível(eis)</p>
+                  <p className="mt-1 text-muted-foreground">
+                    A sua sessão está focada na operação. As opções de administração global continuam reservadas ao super admin.
+                  </p>
                 </div>
-              ))}
-            </div>
+                <Button asChild variant="outline">
+                  <Link href="/dashboard/trainings">Abrir operação de formação</Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Alerts and notifications */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Alertas</CardTitle>
-              <CardDescription>Acoes que requerem atencao</CardDescription>
-            </div>
-            <Badge variant="destructive">{recentNotifications.length}</Badge>
+          <CardHeader>
+            <CardTitle>Operação de formação</CardTitle>
+            <CardDescription>Catálogo, sessões, calendário e reporting.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentNotifications.map((notification) => (
-                <div 
-                  key={notification.id} 
-                  className="p-3 rounded-lg border border-border bg-card"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-2 ${
-                      notification.type === "certification_expiring" 
-                        ? "bg-warning" 
-                        : notification.type === "compliance_alert"
-                        ? "bg-destructive"
-                        : "bg-primary"
-                    }`} />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium">{notification.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {notification.message}
-                      </p>
-                      <Button 
-                        variant="link" 
-                        size="sm" 
-                        className="px-0 h-auto mt-2 text-xs"
-                      >
-                        Ver detalhes
-                      </Button>
-                    </div>
+            {!hasTrainingData ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <BookOpen />
+                  </EmptyMedia>
+                  <EmptyTitle>Sem ações de formação</EmptyTitle>
+                  <EmptyDescription>
+                    Crie a primeira formação para começar a usar o catálogo, preencher o calendário e acompanhar participantes e tarefas.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <Button asChild>
+                      <Link href="/dashboard/trainings/new">Criar formação</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/dashboard/trainings">Ver módulo de formação</Link>
+                    </Button>
                   </div>
+                </EmptyContent>
+              </Empty>
+            ) : (
+              <div className="space-y-3 text-sm">
+                <div className="rounded-2xl border p-4">
+                  <p className="font-medium">{trainingState.trainings.length} formação(ões) criada(s)</p>
+                  <p className="mt-1 text-muted-foreground">{trainingState.employees.length} colaborador(es) e {pendingTasks.length} tarefa(s) pendente(s) no workspace.</p>
                 </div>
-              ))}
-            </div>
-            <Button variant="outline" className="w-full mt-4">
-              Ver todas as notificacoes
-            </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild variant="outline">
+                    <Link href="/dashboard/trainings">Abrir catálogo</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/dashboard/calendar">Abrir calendário</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Acoes Rapidas</CardTitle>
-          <CardDescription>Tarefas comuns para agilizar o seu trabalho</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href="/dashboard/trainings/new">
-                <Plus className="w-5 h-5" />
-                <span className="text-sm">Nova Formacao</span>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href="/dashboard/reports/export">
-                <ArrowRight className="w-5 h-5" />
-                <span className="text-sm">Exportar Relatorio</span>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href="/dashboard/employees">
-                <Users className="w-5 h-5" />
-                <span className="text-sm">Gerir Equipa</span>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href="/dashboard/calendar">
-                <CalendarDays className="w-5 h-5" />
-                <span className="text-sm">Ver Calendario</span>
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
+  )
+}
+
+function MetricCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+}: {
+  title: string
+  value: string
+  description: string
+  icon: typeof Building2
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-start justify-between p-6">
+        <div>
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="mt-2 text-3xl font-bold">{value}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+          <Icon className="h-5 w-5" />
+        </div>
+      </CardContent>
+    </Card>
   )
 }

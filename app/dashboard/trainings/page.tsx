@@ -1,19 +1,39 @@
 "use client"
 
-import { useState } from "react"
+import type { ChangeEvent } from "react"
+import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import {
+  BookOpen,
+  Building2,
+  CalendarDays,
+  Clock,
+  Download,
+  Eye,
+  FileSpreadsheet,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  UserPlus,
+  Users,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { 
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
   TableBody,
@@ -22,404 +42,1006 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { toast } from "sonner"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  GraduationCap,
-  Clock,
-  Users,
-  CalendarDays,
-  MapPin,
-  Video,
-  Laptop,
-  Eye,
-  Edit,
-  Trash2,
-  Copy,
-  Download
-} from "lucide-react"
-import { trainings } from "@/lib/mock-data"
-import type { Training } from "@/lib/types"
+  buildCsv,
+  collaboratorTemplatePath,
+  getRuLabel,
+  taskPriorityLabels,
+  taskStatusLabels,
+  trainingFormatLabels,
+  trainingProviderTemplatePath,
+  trainingStatusLabels,
+  useTrainingWorkspace,
+} from "@/lib/training-platform"
 
-const statusColors = {
-  scheduled: "bg-primary/20 text-primary",
-  in_progress: "bg-accent/20 text-accent",
-  completed: "bg-muted text-muted-foreground",
-  cancelled: "bg-destructive/20 text-destructive"
-}
+const setupSteps = [
+  {
+    id: "step-1",
+    title: "Monte a base de colaboradores",
+    description: "Importe o ficheiro preparado no Excel ou crie manualmente os primeiros colaboradores com departamento e objetivo anual de horas.",
+    actionLabel: "Importar colaboradores",
+    icon: Users,
+  },
+  {
+    id: "step-2",
+    title: "Registe as entidades formadoras",
+    description: "Guarde parceiros, academias e centros externos para ter o catálogo operacional pronto antes das primeiras ações.",
+    actionLabel: "Criar entidade",
+    icon: Building2,
+  },
+  {
+    id: "step-3",
+    title: "Crie a primeira formação",
+    description: "Basta começar com título, datas, duração e participantes. Os detalhes de reporting podem ser afinados depois.",
+    actionLabel: "Nova formação",
+    href: "/dashboard/trainings/new",
+    icon: BookOpen,
+  },
+  {
+    id: "step-4",
+    title: "Exporte quando já houver dados",
+    description: "Depois pode tirar o mapa de formações e o resumo por colaborador para apoiar o relatório único e reporting interno.",
+    actionLabel: "Exportar dados",
+    icon: Download,
+  },
+]
 
-const statusLabels = {
-  scheduled: "Agendada",
-  in_progress: "Em Curso",
-  completed: "Concluida",
-  cancelled: "Cancelada"
-}
+async function extractImportText(file: File) {
+  if (/\.(xlsx|xls)$/i.test(file.name)) {
+    const XLSX = await import("xlsx")
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" })
+    const firstSheetName = workbook.SheetNames[0]
+    if (!firstSheetName) {
+      throw new Error("O ficheiro Excel não tem folhas para importar.")
+    }
 
-const formatIcons = {
-  presencial: MapPin,
-  online: Video,
-  hibrido: Laptop
-}
+    return XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheetName], {
+      blankrows: false,
+    })
+  }
 
-const formatLabels = {
-  presencial: "Presencial",
-  online: "Online",
-  hibrido: "Hibrido"
+  return file.text()
 }
 
 export default function TrainingsPage() {
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [formatFilter, setFormatFilter] = useState<string>("all")
+  const {
+    state,
+    isReady,
+    pendingTasks,
+    createEmployee,
+    importEmployeesFromText,
+    createTrainingProvider,
+    updateTrainingProvider,
+    deleteTrainingProvider,
+    importTrainingProvidersFromText,
+    deleteTraining,
+    departmentOptions,
+    buildTrainingMapExport,
+    buildEmployeeTrainingExport,
+  } = useTrainingWorkspace()
 
-  const filteredTrainings = trainings.filter(training => {
-    const matchesSearch = training.title.toLowerCase().includes(search.toLowerCase()) ||
-      training.instructor.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === "all" || training.status === statusFilter
-    const matchesFormat = formatFilter === "all" || training.format === formatFilter
-    return matchesSearch && matchesStatus && matchesFormat
+  const employeeImportInputRef = useRef<HTMLInputElement | null>(null)
+  const providerImportInputRef = useRef<HTMLInputElement | null>(null)
+
+  const [search, setSearch] = useState("")
+  const [employeeSearch, setEmployeeSearch] = useState("")
+  const [departmentFilter, setDepartmentFilter] = useState("all")
+  const [locationFilter, setLocationFilter] = useState("all")
+  const [managerFilter, setManagerFilter] = useState("all")
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false)
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false)
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
+  const [employeeForm, setEmployeeForm] = useState({
+    name: "",
+    email: "",
+    department: "",
+    employeeNumber: "",
+    jobTitle: "",
+    location: "",
+    manager: "",
+    trainingHoursTarget: "40",
+  })
+  const [providerForm, setProviderForm] = useState({
+    name: "",
+    typeCode: "02",
+    nif: "",
+    contactEmail: "",
+    location: "",
   })
 
-  const activeTrainings = filteredTrainings.filter(t => t.status === "scheduled" || t.status === "in_progress")
-  const completedTrainings = filteredTrainings.filter(t => t.status === "completed")
+  const filteredTrainings = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase()
+    if (!normalizedSearch) return state.trainings
+
+    return state.trainings.filter((training) =>
+      training.title.toLowerCase().includes(normalizedSearch) ||
+      training.instructor.toLowerCase().includes(normalizedSearch) ||
+      training.skills.some((skill) => skill.toLowerCase().includes(normalizedSearch)),
+    )
+  }, [search, state.trainings])
+
+  const employeeRows = useMemo(() => {
+    return state.employees.map((employee) => {
+      const participations = Object.entries(state.participantsByTraining).flatMap(([trainingId, participants]) =>
+        participants
+          .filter((participant) => participant.employeeId === employee.id)
+          .map((participant) => ({
+            participant,
+            training: state.trainings.find((training) => training.id === trainingId) || null,
+          })),
+      )
+
+      const attendedHours = participations.reduce((total, item) => total + item.participant.attendedHours, 0)
+      const completedTrainings = participations.filter((item) => item.participant.status === "completed").length
+      const hoursTarget = employee.trainingHoursTarget || 40
+      const lastTrainingDate = participations
+        .map((item) => item.training?.endDate)
+        .filter((date): date is Date => Boolean(date))
+        .sort((left, right) => right.getTime() - left.getTime())[0]
+
+      return {
+        ...employee,
+        attendedHours,
+        hoursTarget,
+        progress: hoursTarget > 0 ? Math.min(100, Math.round((attendedHours / hoursTarget) * 100)) : 0,
+        trainingsCount: participations.length,
+        completedTrainings,
+        lastTrainingDate,
+      }
+    })
+  }, [state.employees, state.participantsByTraining, state.trainings])
+
+  const locationOptions = useMemo(
+    () =>
+      Array.from(new Set(employeeRows.map((employee) => employee.location).filter((value): value is string => Boolean(value)))).sort((a, b) =>
+        a.localeCompare(b, "pt"),
+      ),
+    [employeeRows],
+  )
+
+  const managerOptions = useMemo(
+    () =>
+      Array.from(new Set(employeeRows.map((employee) => employee.manager).filter((value): value is string => Boolean(value)))).sort((a, b) =>
+        a.localeCompare(b, "pt"),
+      ),
+    [employeeRows],
+  )
+
+  const filteredEmployees = useMemo(() => {
+    const normalizedSearch = employeeSearch.trim().toLowerCase()
+
+    return employeeRows.filter((employee) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        [
+          employee.name,
+          employee.email,
+          employee.department,
+          employee.jobTitle,
+          employee.location,
+          employee.manager,
+          employee.employeeNumber,
+        ]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(normalizedSearch))
+
+      const matchesDepartment = departmentFilter === "all" || employee.department === departmentFilter
+      const matchesLocation = locationFilter === "all" || employee.location === locationFilter
+      const matchesManager = managerFilter === "all" || employee.manager === managerFilter
+
+      return matchesSearch && matchesDepartment && matchesLocation && matchesManager
+    })
+  }, [departmentFilter, employeeRows, employeeSearch, locationFilter, managerFilter])
+
+  const hasWorkspaceData =
+    state.trainings.length > 0 || state.employees.length > 0 || state.trainingProviders.length > 0
+
+  const totalParticipants = Object.values(state.participantsByTraining).reduce((sum, items) => sum + items.length, 0)
+
+  const resetProviderForm = () => {
+    setProviderForm({
+      name: "",
+      typeCode: "02",
+      nif: "",
+      contactEmail: "",
+      location: "",
+    })
+    setEditingProviderId(null)
+  }
+
+  const openCreateProviderDialog = () => {
+    resetProviderForm()
+    setProviderDialogOpen(true)
+  }
+
+  const openEditProviderDialog = (providerId: string) => {
+    const provider = state.trainingProviders.find((item) => item.id === providerId)
+    if (!provider) return
+
+    setEditingProviderId(provider.id)
+    setProviderForm({
+      name: provider.name,
+      typeCode: provider.typeCode,
+      nif: provider.nif || "",
+      contactEmail: provider.contactEmail || "",
+      location: provider.location || "",
+    })
+    setProviderDialogOpen(true)
+  }
+
+  const handleCreateEmployee = () => {
+    if (!employeeForm.name || !employeeForm.email || !employeeForm.department) {
+      toast.error("Preencha nome, email e departamento para criar o colaborador.")
+      return
+    }
+
+    createEmployee({
+      ...employeeForm,
+      trainingHoursTarget: Number(employeeForm.trainingHoursTarget) || 40,
+    })
+
+    setEmployeeDialogOpen(false)
+    setEmployeeForm({
+      name: "",
+      email: "",
+      department: "",
+      employeeNumber: "",
+      jobTitle: "",
+      location: "",
+      manager: "",
+      trainingHoursTarget: "40",
+    })
+    toast.success("Colaborador criado com sucesso.")
+  }
+
+  const handleSaveProvider = () => {
+    if (!providerForm.name) {
+      toast.error("Indique pelo menos o nome da entidade formadora.")
+      return
+    }
+
+    if (editingProviderId) {
+      updateTrainingProvider(editingProviderId, providerForm)
+      toast.success("Entidade formadora atualizada.")
+    } else {
+      createTrainingProvider(providerForm)
+      toast.success("Entidade formadora criada.")
+    }
+
+    setProviderDialogOpen(false)
+    resetProviderForm()
+  }
+
+  const handleDeleteProvider = (providerId: string, providerName: string) => {
+    const confirmed = window.confirm(`Eliminar a entidade formadora "${providerName}"?`)
+    if (!confirmed) return
+
+    deleteTrainingProvider(providerId)
+    toast.success("Entidade formadora removida.")
+  }
+
+  const handleDeleteTraining = (trainingId: string) => {
+    const confirmed = window.confirm("Eliminar esta formação e as tarefas associadas?")
+    if (!confirmed) return
+
+    deleteTraining(trainingId)
+    toast.success("Formação eliminada.")
+  }
+
+  const downloadCsvFile = (filename: string, rows: Array<Record<string, string | number | undefined | null>>) => {
+    if (rows.length === 0) {
+      toast.error("Ainda não existem dados para exportar.")
+      return
+    }
+
+    const csv = buildCsv(rows)
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", filename)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleEmployeesImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+
+    if (!/\.(csv|txt|xlsx|xls)$/i.test(file.name)) {
+      toast.error("Use um ficheiro Excel (.xls ou .xlsx) ou CSV.")
+      return
+    }
+
+    try {
+      const summary = importEmployeesFromText(await extractImportText(file))
+      if (summary.created === 0 && summary.updated === 0) {
+        toast.error(summary.errors[0] || "Não foi possível importar colaboradores.")
+        return
+      }
+
+      toast.success(`${summary.created} criado(s) e ${summary.updated} atualizado(s).`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível ler o ficheiro.")
+    }
+  }
+
+  const handleProvidersImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+
+    if (!/\.(csv|txt|xlsx|xls)$/i.test(file.name)) {
+      toast.error("Use um ficheiro Excel (.xls ou .xlsx) ou CSV.")
+      return
+    }
+
+    try {
+      const summary = importTrainingProvidersFromText(await extractImportText(file))
+      if (summary.created === 0 && summary.updated === 0) {
+        toast.error(summary.errors[0] || "Não foi possível importar entidades formadoras.")
+        return
+      }
+
+      toast.success(`${summary.created} criada(s) e ${summary.updated} atualizada(s).`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível ler o ficheiro.")
+    }
+  }
+
+  if (!isReady) {
+    return <div className="h-[620px] rounded-3xl bg-muted animate-pulse" />
+  }
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Formacoes</h1>
-          <p className="text-muted-foreground">
-            Gerir todas as formacoes da sua organizacao
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/trainings/new">
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Formacao
-          </Link>
-        </Button>
-      </div>
+      <input
+        ref={employeeImportInputRef}
+        type="file"
+        accept=".xls,.xlsx,.csv,.txt"
+        className="hidden"
+        onChange={handleEmployeesImport}
+      />
+      <input
+        ref={providerImportInputRef}
+        type="file"
+        accept=".xls,.xlsx,.csv,.txt"
+        className="hidden"
+        onChange={handleProvidersImport}
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{trainings.length}</div>
-            <div className="text-sm text-muted-foreground">Total de Formacoes</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-primary">
-              {trainings.filter(t => t.status === "scheduled").length}
+      <Card className="overflow-hidden border-none bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_45%,#bfdbfe_100%)] text-white">
+        <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+          <div className="space-y-4">
+            <Badge className="w-fit bg-white/15 text-white hover:bg-white/15">Módulo de Formação</Badge>
+            <div>
+              <h1 className="text-3xl font-bold sm:text-4xl">Crie a operação real da formação.</h1>
+              <p className="mt-3 max-w-2xl text-sm text-white/80 sm:text-base">
+                Importe colaboradores a partir do Excel, organize entidades formadoras, registe ações e exporte os
+                mapas quando precisar.
+              </p>
             </div>
-            <div className="text-sm text-muted-foreground">Agendadas</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-accent">
-              {trainings.filter(t => t.status === "in_progress").length}
+            <div className="flex flex-wrap gap-3">
+              <Button asChild className="bg-white text-slate-900 hover:bg-white/90">
+                <Link href="/dashboard/trainings/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nova formação
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/15"
+                onClick={() => employeeImportInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Importar Excel
+              </Button>
+              <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/15">
+                <Link href="/dashboard/calendar">
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  Abrir calendário
+                </Link>
+              </Button>
             </div>
-            <div className="text-sm text-muted-foreground">Em Curso</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">
-              {trainings.reduce((acc, t) => acc + t.currentParticipants, 0)}
-            </div>
-            <div className="text-sm text-muted-foreground">Participantes</div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Pesquisar formacoes..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
+          <div className="grid gap-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+            <div className="rounded-2xl bg-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/60">Resumo atual</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <SummaryStat label="Formações" value={String(state.trainings.length)} />
+                <SummaryStat label="Colaboradores" value={String(state.employees.length)} />
+                <SummaryStat label="Entidades formadoras" value={String(state.trainingProviders.length)} />
+                <SummaryStat label="Participações" value={String(totalParticipants)} />
+              </div>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os estados</SelectItem>
-                <SelectItem value="scheduled">Agendadas</SelectItem>
-                <SelectItem value="in_progress">Em Curso</SelectItem>
-                <SelectItem value="completed">Concluidas</SelectItem>
-                <SelectItem value="cancelled">Canceladas</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={formatFilter} onValueChange={setFormatFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Formato" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os formatos</SelectItem>
-                <SelectItem value="presencial">Presencial</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
-                <SelectItem value="hibrido">Hibrido</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button asChild variant="outline" className="justify-start border-white/20 bg-white/5 text-white hover:bg-white/10">
+                <Link href={collaboratorTemplatePath}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Modelo de colaboradores
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="justify-start border-white/20 bg-white/5 text-white hover:bg-white/10">
+                <Link href={trainingProviderTemplatePath}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Modelo de entidades
+                </Link>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Trainings tabs */}
-      <Tabs defaultValue="active" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="active" className="gap-2">
-            Ativas
-            <Badge variant="secondary" className="ml-1">{activeTrainings.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="gap-2">
-            Concluidas
-            <Badge variant="secondary" className="ml-1">{completedTrainings.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="all">
-            Todas
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active" className="space-y-4">
-          <TrainingGrid trainings={activeTrainings} />
-        </TabsContent>
-
-        <TabsContent value="completed" className="space-y-4">
-          <TrainingGrid trainings={completedTrainings} />
-        </TabsContent>
-
-        <TabsContent value="all" className="space-y-4">
-          <TrainingTable trainings={filteredTrainings} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
-}
-
-function TrainingGrid({ trainings }: { trainings: Training[] }) {
-  if (trainings.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-12 text-center">
-          <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">Nenhuma formacao encontrada</h3>
-          <p className="text-muted-foreground mb-4">
-            Nao ha formacoes que correspondam aos filtros selecionados.
-          </p>
-          <Button asChild>
-            <Link href="/dashboard/trainings/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Criar Formacao
-            </Link>
+      <Dialog open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar colaborador</DialogTitle>
+            <DialogDescription>Adicione um colaborador real para o poder associar às próximas formações.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input value={employeeForm.name} onChange={(event) => setEmployeeForm((current) => ({ ...current, name: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Departamento</Label>
+                <Input value={employeeForm.department} onChange={(event) => setEmployeeForm((current) => ({ ...current, department: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Função</Label>
+                <Input value={employeeForm.jobTitle} onChange={(event) => setEmployeeForm((current) => ({ ...current, jobTitle: event.target.value }))} />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Número interno</Label>
+                <Input value={employeeForm.employeeNumber} onChange={(event) => setEmployeeForm((current) => ({ ...current, employeeNumber: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Horas objetivo por ano</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={employeeForm.trainingHoursTarget}
+                  onChange={(event) => setEmployeeForm((current) => ({ ...current, trainingHoursTarget: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Localização</Label>
+                <Input value={employeeForm.location} onChange={(event) => setEmployeeForm((current) => ({ ...current, location: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Manager</Label>
+                <Input value={employeeForm.manager} onChange={(event) => setEmployeeForm((current) => ({ ...current, manager: event.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <Button onClick={handleCreateEmployee}>
+            <Plus className="mr-2 h-4 w-4" />
+            Guardar colaborador
           </Button>
-        </CardContent>
-      </Card>
-    )
-  }
+        </DialogContent>
+      </Dialog>
 
-  return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {trainings.map((training) => {
-        const FormatIcon = formatIcons[training.format]
-        return (
-          <Card key={training.id} className="group hover:border-primary/50 transition-colors">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <Badge className={statusColors[training.status]}>
-                  {statusLabels[training.status]}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Eye className="w-4 h-4 mr-2" />
-                      Ver detalhes
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Duplicar
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+      <Dialog
+        open={providerDialogOpen}
+        onOpenChange={(open) => {
+          setProviderDialogOpen(open)
+          if (!open) resetProviderForm()
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProviderId ? "Editar entidade formadora" : "Nova entidade formadora"}</DialogTitle>
+            <DialogDescription>Guarde parceiros externos ou entidades internas para reutilizar nas próximas formações.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input value={providerForm.name} onChange={(event) => setProviderForm((current) => ({ ...current, name: event.target.value }))} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de entidade</Label>
+                <Select value={providerForm.typeCode} onValueChange={(value) => setProviderForm((current) => ({ ...current, typeCode: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="01">Entidade empregadora</SelectItem>
+                    <SelectItem value="02">Centro de formação externo</SelectItem>
+                    <SelectItem value="03">Instituição de ensino</SelectItem>
+                    <SelectItem value="04">Associação setorial / profissional</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <CardTitle className="text-lg mt-2">{training.title}</CardTitle>
-              <CardDescription className="line-clamp-2">
-                {training.description}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {training.mandatory && (
-                  <Badge variant="destructive" className="text-xs">Obrigatoria</Badge>
-                )}
-                <Badge variant="outline" className="text-xs gap-1">
-                  <FormatIcon className="w-3 h-3" />
-                  {formatLabels[training.format]}
-                </Badge>
+              <div className="space-y-2">
+                <Label>NIF</Label>
+                <Input value={providerForm.nif} onChange={(event) => setProviderForm((current) => ({ ...current, nif: event.target.value }))} />
               </div>
-              
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CalendarDays className="w-4 h-4" />
-                  <span>
-                    {new Date(training.startDate).toLocaleDateString('pt-PT', {
-                      day: 'numeric',
-                      month: 'short'
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span>{training.duration}h</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Users className="w-4 h-4" />
-                  <span>{training.currentParticipants}/{training.maxParticipants}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <GraduationCap className="w-4 h-4" />
-                  <span className="truncate">{training.instructor}</span>
-                </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Email de contacto</Label>
+                <Input value={providerForm.contactEmail} onChange={(event) => setProviderForm((current) => ({ ...current, contactEmail: event.target.value }))} />
               </div>
+              <div className="space-y-2">
+                <Label>Localização</Label>
+                <Input value={providerForm.location} onChange={(event) => setProviderForm((current) => ({ ...current, location: event.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <Button onClick={handleSaveProvider}>
+            <Plus className="mr-2 h-4 w-4" />
+            {editingProviderId ? "Guardar alterações" : "Criar entidade"}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
-              <div className="pt-2 border-t border-border">
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href={`/dashboard/trainings/${training.id}`}>
-                    Ver Detalhes
-                  </Link>
+      {!hasWorkspaceData ? (
+        <Card>
+          <CardContent className="p-6 lg:p-8">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BookOpen />
+                </EmptyMedia>
+                <EmptyTitle>A área de formação está pronta a configurar</EmptyTitle>
+                <EmptyDescription>
+                  Comece pelos colaboradores e pelas entidades formadoras. Depois crie a primeira ação para ativar
+                  catálogo, calendário, progresso e exportações.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent className="w-full">
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button onClick={() => employeeImportInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar colaboradores
+                  </Button>
+                  <Button variant="outline" onClick={openCreateProviderDialog}>
+                    <Building2 className="mr-2 h-4 w-4" />
+                    Criar entidade formadora
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/dashboard/trainings/new">Criar formação</Link>
+                  </Button>
+                </div>
+
+                <div className="grid w-full gap-4 xl:grid-cols-2">
+                  {setupSteps.map((step, index) => {
+                    const Icon = step.icon
+
+                    const handleClick = () => {
+                      if (step.id === "step-1") employeeImportInputRef.current?.click()
+                      if (step.id === "step-2") openCreateProviderDialog()
+                      if (step.id === "step-4") {
+                        downloadCsvFile("mapa-formacoes.csv", buildTrainingMapExport())
+                      }
+                    }
+
+                    return (
+                      <div key={step.id} className="rounded-3xl border bg-gradient-to-br from-white to-slate-50 p-6 text-left shadow-sm">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-3">
+                            <Badge variant="outline">Passo {index + 1}</Badge>
+                            <div>
+                              <p className="text-lg font-semibold text-slate-900">{step.title}</p>
+                              <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <Icon className="h-5 w-5" />
+                          </div>
+                        </div>
+
+                        <div className="mt-6">
+                          {step.href ? (
+                            <Button asChild variant="outline">
+                              <Link href={step.href}>{step.actionLabel}</Link>
+                            </Button>
+                          ) : (
+                            <Button variant="outline" onClick={handleClick}>
+                              {step.actionLabel}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </EmptyContent>
+            </Empty>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>Entidades formadoras</CardTitle>
+                <CardDescription>Crie ou importe o diretório de parceiros e centros de formação.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border bg-slate-50 p-4">
+                  <p className="text-3xl font-semibold">{state.trainingProviders.length}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {state.trainingProviders.length === 1 ? "entidade registada" : "entidades registadas"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={openCreateProviderDialog}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nova entidade
+                  </Button>
+                  <Button variant="outline" onClick={() => providerImportInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar lista
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>Colaboradores</CardTitle>
+                <CardDescription>Importe a lista do Excel ou crie manualmente os primeiros registos.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border bg-slate-50 p-4">
+                  <p className="text-3xl font-semibold">{state.employees.length}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {state.employees.length === 1 ? "colaborador disponível" : "colaboradores disponíveis"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <DialogTriggerButton onClick={() => setEmployeeDialogOpen(true)} label="Novo colaborador" icon={UserPlus} />
+                  <Button variant="outline" onClick={() => employeeImportInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar ficheiro
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>Exportações</CardTitle>
+                <CardDescription>Leve o mapa global e o resumo por colaborador para reporting.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button variant="outline" className="w-full justify-start" onClick={() => downloadCsvFile("mapa-formacoes.csv", buildTrainingMapExport())}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Exportar mapa de formações
                 </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => downloadCsvFile("formacoes-por-colaborador.csv", buildEmployeeTrainingExport())}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Exportar formações por colaborador
+                </Button>
+                <div className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">
+                  As exportações continuam em CSV, prontas para abrir no Excel ou anexar ao reporting interno.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <Card>
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Catálogo de formações</CardTitle>
+                  <CardDescription>Lista viva das ações já registadas neste ambiente.</CardDescription>
+                </div>
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Pesquisar por título, formador ou skill"
+                    className="pl-10"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {filteredTrainings.length === 0 && (
+                  <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                    Ainda não existem formações com este filtro.
+                  </div>
+                )}
+                {filteredTrainings.map((training) => (
+                  <div key={training.id} className="rounded-2xl border p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{training.title}</p>
+                          <Badge variant="outline">{trainingFormatLabels[training.format]}</Badge>
+                          <Badge variant="secondary">{trainingStatusLabels[training.status]}</Badge>
+                          {training.mandatory && <Badge>Obrigatória</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{training.description || "Sem descrição."}</p>
+                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                          <span>{training.currentParticipants}/{training.maxParticipants} participantes</span>
+                          <span>{training.durationHours}h</span>
+                          <span>{training.instructor}</span>
+                          <span>
+                            {training.targetDepartments?.length
+                              ? training.targetDepartments.join(", ")
+                              : training.department || "Sem departamento definido"}
+                          </span>
+                          <span>{training.trainingProviderName || getRuLabel("T34", training.trainingEntityCode)}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/dashboard/trainings/${training.id}`}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Abrir
+                          </Link>
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDeleteTraining(training.id)}>
+                          <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                          Apagar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Tarefas em aberto</CardTitle>
+                <CardDescription>Próximas ações para manter a execução em dia.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pendingTasks.length === 0 && (
+                  <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                    Ainda não existem tarefas pendentes. As tarefas aparecem quando cria formações.
+                  </div>
+                )}
+                {pendingTasks.slice(0, 6).map((task) => (
+                  <div key={task.id} className="rounded-2xl border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium">{task.title}</p>
+                      <Badge variant="outline">{taskPriorityLabels[task.priority]}</Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">{task.owner}</p>
+                    <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>{task.dueDate.toLocaleDateString("pt-PT")}</span>
+                      <span>·</span>
+                      <span>{taskStatusLabels[task.status]}</span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card id="colaboradores">
+            <CardHeader className="gap-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <CardTitle>Colaboradores e progresso</CardTitle>
+                  <CardDescription>
+                    Filtre por dados do ficheiro importado, acompanhe horas concluídas e veja rapidamente quem já tem histórico.
+                  </CardDescription>
+                </div>
+                <div className="relative w-full lg:max-w-sm">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                    placeholder="Pesquisar nome, email, função, manager..."
+                    className="pl-10"
+                  />
+                </div>
               </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {departmentOptions.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Localização" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as localizações</SelectItem>
+                    {locationOptions.map((location) => (
+                      <SelectItem key={location} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={managerFilter} onValueChange={setManagerFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os managers</SelectItem>
+                    {managerOptions.map((manager) => (
+                      <SelectItem key={manager} value={manager}>
+                        {manager}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredEmployees.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-8 text-sm text-muted-foreground">
+                  Ainda não existem colaboradores com estes filtros. Pode importar um ficheiro vindo do Excel ou criar um
+                  colaborador manualmente.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead>Departamento</TableHead>
+                      <TableHead>Contexto</TableHead>
+                      <TableHead>Horas de formação</TableHead>
+                      <TableHead>Atividade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEmployees.map((employee) => (
+                      <TableRow key={employee.id}>
+                        <TableCell className="align-top">
+                          <div className="space-y-1">
+                            <div className="font-medium">{employee.name}</div>
+                            <div className="text-sm text-muted-foreground">{employee.email}</div>
+                            {employee.employeeNumber && (
+                              <div className="text-xs text-muted-foreground">ID interno: {employee.employeeNumber}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="space-y-1">
+                            <div>{employee.department}</div>
+                            {employee.jobTitle && <div className="text-sm text-muted-foreground">{employee.jobTitle}</div>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="space-y-1 text-sm">
+                            <div>{employee.location || "Sem localização"}</div>
+                            <div className="text-muted-foreground">{employee.manager || "Sem manager"}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-[260px] align-top">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span>{employee.attendedHours}h concluídas</span>
+                              <span className="text-muted-foreground">/{employee.hoursTarget}h</span>
+                            </div>
+                            <Progress value={employee.progress} className="h-2" />
+                            <div className="text-xs text-muted-foreground">
+                              {employee.progress >= 100
+                                ? "Objetivo anual atingido"
+                                : `${employee.hoursTarget - employee.attendedHours}h em falta para o objetivo`}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="space-y-1 text-sm">
+                            <div>{employee.trainingsCount} formação(ões)</div>
+                            <div className="text-muted-foreground">{employee.completedTrainings} concluída(s)</div>
+                            <div className="text-muted-foreground">
+                              {employee.lastTrainingDate ? employee.lastTrainingDate.toLocaleDateString("pt-PT") : "Sem histórico"}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
-        )
-      })}
+
+          <Card>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Lista de entidades formadoras</CardTitle>
+                <CardDescription>Catálogo simples para organizar quem entrega as formações.</CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => providerImportInputRef.current?.click()}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar Excel
+                </Button>
+                <Button onClick={openCreateProviderDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nova entidade
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {state.trainingProviders.length === 0 && (
+                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Ainda não existem entidades formadoras. Crie manualmente ou importe o modelo para começar.
+                </div>
+              )}
+              {state.trainingProviders.map((provider) => (
+                <div key={provider.id} className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{provider.name}</p>
+                      <Badge variant="outline">{getRuLabel("T34", provider.typeCode)}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                      <span>{provider.nif || "Sem NIF"}</span>
+                      <span>{provider.contactEmail || "Sem email"}</span>
+                      <span>{provider.location || "Sem localização"}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEditProviderDialog(provider.id)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteProvider(provider.id, provider.name)}>
+                      <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                      Apagar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
 
-function TrainingTable({ trainings }: { trainings: Training[] }) {
+function DialogTriggerButton({
+  onClick,
+  label,
+  icon: Icon,
+}: {
+  onClick: () => void
+  label: string
+  icon: typeof UserPlus
+}) {
   return (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Formacao</TableHead>
-              <TableHead>Formato</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Duracao</TableHead>
-              <TableHead>Participantes</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {trainings.map((training) => {
-              const FormatIcon = formatIcons[training.format]
-              return (
-                <TableRow key={training.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium flex items-center gap-2">
-                        {training.title}
-                        {training.mandatory && (
-                          <Badge variant="destructive" className="text-xs">Obrig.</Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {training.instructor}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FormatIcon className="w-4 h-4 text-muted-foreground" />
-                      <span>{formatLabels[training.format]}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(training.startDate).toLocaleDateString('pt-PT', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    })}
-                  </TableCell>
-                  <TableCell>{training.duration}h</TableCell>
-                  <TableCell>
-                    {training.currentParticipants}/{training.maxParticipants}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusColors[training.status]}>
-                      {statusLabels[training.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="w-4 h-4 mr-2" />
-                          Ver detalhes
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Download className="w-4 h-4 mr-2" />
-                          Exportar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <Button onClick={onClick}>
+      <Icon className="mr-2 h-4 w-4" />
+      {label}
+    </Button>
+  )
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-white/10 p-3">
+      <p className="text-xs uppercase tracking-[0.16em] text-white/60">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+    </div>
   )
 }

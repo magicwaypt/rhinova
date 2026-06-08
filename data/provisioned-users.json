@@ -1,0 +1,60 @@
+{
+  "users": [
+    {
+      "user": {
+        "id": "user-wmpwjm1q",
+        "name": "Pedro Palrão",
+        "email": "pp@magicway.pt",
+        "title": "CEO",
+        "platformRole": "user",
+        "status": "active",
+        "phone": "967647119",
+        "lastAccessAt": "2026-06-08T21:05:15.465Z"
+      },
+      "entities": [
+        {
+          "id": "entity-zz9byd3t",
+          "name": "MagicWay",
+          "legalName": "Consultora",
+          "nif": "234882905",
+          "industry": "Consultoria",
+          "employeeCount": 5,
+          "status": "setup",
+          "headquarters": "Lisboa",
+          "createdAt": "2026-06-08T20:56:58.898Z"
+        },
+        {
+          "id": "entity-rhinova",
+          "name": "Rhinova HQ",
+          "legalName": "Rhinova People Systems, S.A.",
+          "nif": "518003210",
+          "industry": "Tecnologia",
+          "employeeCount": 148,
+          "status": "active",
+          "headquarters": "Lisboa",
+          "createdAt": "2024-01-15T09:00:00.000Z"
+        }
+      ],
+      "memberships": [
+        {
+          "id": "membership-41255bmi",
+          "userId": "user-wmpwjm1q",
+          "entityId": "entity-zz9byd3t",
+          "role": "manager",
+          "isDefault": true
+        },
+        {
+          "id": "membership-2amajncv",
+          "userId": "user-wmpwjm1q",
+          "entityId": "entity-rhinova",
+          "role": "viewer",
+          "isDefault": false
+        }
+      ],
+      "credential": {
+        "salt": "9ebdeeb354ec91cceed75e45891247f9",
+        "hash": "4afdabb0dde6cec5e0dbc8501861caa2ec62e94a32286cce61a138cbceb10e34baf9c99b90787be2bab04613dbf4dc266c319de795c0ca0b5543d3a8cf185d30"
+      }
+    }
+  ]
+}

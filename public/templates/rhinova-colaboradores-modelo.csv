@@ -1,0 +1,4 @@
+nome_completo,email,departamento,funcao,numero_colaborador,data_admissao,manager,localizacao,horas_formacao_ano
+Marta Afonso,marta.afonso@empresa.pt,Recursos Humanos,HR Business Partner,RH-2001,2024-01-15,Maria Santos,Lisboa,40
+Tiago Ribeiro,tiago.ribeiro@empresa.pt,Engenharia,Frontend Developer,RH-2002,2023-09-04,Pedro Ferreira,Porto,40
+Leonor Costa,leonor.costa@empresa.pt,Marketing,Marketing Specialist,RH-2003,2025-02-03,Ana Costa,Braga,32

@@ -4,7 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 
 // Exemplo de competências e colaboradores
-const skills = ["Liderança", "Comunicação", "Excel", "Gestão de Projetos", "Inglês"];
+const skills = ["Liderança", "Comunicação", "Excel", "Gestão de Projetos", "Inglês"] as const;
+type SkillName = (typeof skills)[number]
 const employees = [
   { name: "Ana Silva", skills: { "Liderança": 5, "Comunicação": 4, "Excel": 3, "Gestão de Projetos": 4, "Inglês": 2 } },
   { name: "Carlos Souza", skills: { "Liderança": 3, "Comunicação": 5, "Excel": 4, "Gestão de Projetos": 2, "Inglês": 4 } },
@@ -14,7 +15,7 @@ const employees = [
 ];
 
 export default function SkillsMatrixPage() {
-  const [selectedSkill, setSelectedSkill] = useState(skills[0]);
+  const [selectedSkill, setSelectedSkill] = useState<SkillName>(skills[0]);
 
   return (
     <div className="max-w-5xl mx-auto py-10">
