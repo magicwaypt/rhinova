@@ -103,15 +103,32 @@ export function getSessionMaxAge(remember: boolean) {
   return remember ? REMEMBER_SESSION_TTL_SECONDS : DEFAULT_SESSION_TTL_SECONDS
 }
 
-// The app preview runs inside a cross-origin iframe, so the session cookie must
-// use SameSite=None + Secure to be accepted and sent back on subsequent
-// requests. Without this, the cookie is silently dropped and /api/auth/me
-// returns 401 right after a successful login.
-export function getSessionCookieOptions(maxAge: number) {
+function isLocalSessionRequest(requestOrUrl?: Request | string | URL) {
+  if (!requestOrUrl) return false
+
+  try {
+    const url =
+      typeof requestOrUrl === "string"
+        ? new URL(requestOrUrl)
+        : requestOrUrl instanceof URL
+          ? requestOrUrl
+          : new URL(requestOrUrl.url)
+
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1"
+  } catch {
+    return false
+  }
+}
+
+// In preview embeds the cookie needs SameSite=None + Secure, but on local HTTP
+// localhost that combination prevents the browser from persisting the session.
+export function getSessionCookieOptions(maxAge: number, requestOrUrl?: Request | string | URL) {
+  const isLocalRequest = isLocalSessionRequest(requestOrUrl)
+
   return {
     httpOnly: true,
-    sameSite: "none" as const,
-    secure: true,
+    sameSite: (isLocalRequest ? "lax" : "none") as "lax" | "none",
+    secure: !isLocalRequest,
     path: "/",
     maxAge,
   }

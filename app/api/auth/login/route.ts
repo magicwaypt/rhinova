@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const token = createSessionToken(email, maxAge)
     const cookieStore = await cookies()
 
-    cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(maxAge))
+    cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(maxAge, request))
 
     return NextResponse.json({ ok: true, email })
   } catch {

@@ -216,7 +216,7 @@ export default function SettingsPage() {
     setUserDialogOpen(true)
   }
 
-  const handleSaveEntity = () => {
+  const handleSaveEntity = async () => {
     if (!entityForm.name || !entityForm.legalName || !entityForm.nif) {
       toast.error("Preencha nome, razão social e NIF da entidade.")
       return
@@ -231,27 +231,31 @@ export default function SettingsPage() {
       headquarters: entityForm.headquarters,
     }
 
-    const entity = editingEntityId
-      ? updateEntity(editingEntityId, {
-          ...payload,
-          status: state.entities.find((item) => item.id === editingEntityId)?.status || "setup",
-        })
-      : createEntity(payload)
+    try {
+      const entity = editingEntityId
+        ? await updateEntity(editingEntityId, {
+            ...payload,
+            status: state.entities.find((item) => item.id === editingEntityId)?.status || "setup",
+          })
+        : await createEntity(payload)
 
-    setEntityDialogOpen(false)
-    setEditingEntityId(null)
-    setEntityForm({
-      name: "",
-      legalName: "",
-      nif: "",
-      industry: "",
-      employeeCount: "50",
-      headquarters: "Lisboa",
-    })
-    if (entity) {
-      setActiveEntity(entity.id)
+      setEntityDialogOpen(false)
+      setEditingEntityId(null)
+      setEntityForm({
+        name: "",
+        legalName: "",
+        nif: "",
+        industry: "",
+        employeeCount: "50",
+        headquarters: "Lisboa",
+      })
+      if (entity) {
+        setActiveEntity(entity.id)
+      }
+      toast.success(editingEntityId ? "Entidade atualizada." : "Entidade criada e pronta a ser associada a gestores.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível guardar a entidade.")
     }
-    toast.success(editingEntityId ? "Entidade atualizada." : "Entidade criada e pronta a ser associada a gestores.")
   }
 
   const handleSaveUser = async () => {
@@ -326,15 +330,19 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeleteEntity = (entityId: string) => {
+  const handleDeleteEntity = async (entityId: string) => {
     const entity = state.entities.find((item) => item.id === entityId)
     if (!entity) return
 
     const confirmed = window.confirm(`Eliminar a entidade "${entity.name}" e todas as memberships associadas?`)
     if (!confirmed) return
 
-    deleteEntity(entityId)
-    toast.success("Entidade removida.")
+    try {
+      await deleteEntity(entityId)
+      toast.success("Entidade removida.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível remover a entidade.")
+    }
   }
 
   const handleDeleteUser = async (userId: string) => {
@@ -348,8 +356,12 @@ export default function SettingsPage() {
     const confirmed = window.confirm(`Eliminar o user "${user.email}"?`)
     if (!confirmed) return
 
-    await deleteManagedUser(userId)
-    toast.success("User removido.")
+    try {
+      await deleteManagedUser(userId)
+      toast.success("User removido.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível remover o user.")
+    }
   }
 
   const openPasswordDialog = (userId: string) => {
@@ -673,7 +685,11 @@ export default function SettingsPage() {
                                   <button
                                     key={entity.id}
                                     type="button"
-                                    onClick={() => setDefaultEntityForUser(user.id, entity.id)}
+                                    onClick={() => {
+                                      void setDefaultEntityForUser(user.id, entity.id).catch((error) => {
+                                        toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a entidade por defeito.")
+                                      })
+                                    }}
                                     className={`rounded-full border px-2.5 py-1 text-xs ${
                                       membership?.isDefault ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
                                     }`}
@@ -695,7 +711,14 @@ export default function SettingsPage() {
                                 return (
                                   <div key={membership.id} className="flex items-center gap-2">
                                     <span className="min-w-[92px] text-xs text-muted-foreground">{entity?.name}</span>
-                                    <Select value={membership.role} onValueChange={(value: EntityRole) => updateMembershipRole(membership.id, value)}>
+                                    <Select
+                                      value={membership.role}
+                                      onValueChange={(value: EntityRole) => {
+                                        void updateMembershipRole(membership.id, value).catch((error) => {
+                                          toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a role.")
+                                        })
+                                      }}
+                                    >
                                       <SelectTrigger className="h-8 w-[160px]">
                                         <SelectValue />
                                       </SelectTrigger>

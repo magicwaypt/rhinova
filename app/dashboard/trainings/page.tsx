@@ -440,7 +440,16 @@ export default function TrainingsPage() {
                 onClick={() => employeeImportInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Importar Excel
+                Importar colaboradores
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                onClick={() => providerImportInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Importar entidades
               </Button>
               <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
                 <Link href="/dashboard/calendar">
@@ -461,14 +470,22 @@ export default function TrainingsPage() {
                 <SummaryStat label="Participações" value={String(totalParticipants)} />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button asChild variant="outline" className="justify-start border-white/20 bg-white/5 text-white hover:bg-white/10">
+            <div className="grid gap-3 2xl:grid-cols-2">
+              <Button
+                asChild
+                variant="outline"
+                className="h-auto min-h-11 w-full justify-start whitespace-normal border-white/20 bg-white/5 px-4 py-3 text-left leading-snug text-white hover:bg-white/10"
+              >
                 <Link href={collaboratorTemplatePath}>
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
                   Modelo de colaboradores
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="justify-start border-white/20 bg-white/5 text-white hover:bg-white/10">
+              <Button
+                asChild
+                variant="outline"
+                className="h-auto min-h-11 w-full justify-start whitespace-normal border-white/20 bg-white/5 px-4 py-3 text-left leading-snug text-white hover:bg-white/10"
+              >
                 <Link href={trainingProviderTemplatePath}>
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
                   Modelo de entidades
@@ -611,6 +628,10 @@ export default function TrainingsPage() {
                   <Button className="rounded-full" onClick={() => employeeImportInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" />
                     Importar colaboradores
+                  </Button>
+                  <Button variant="outline" className="rounded-full" onClick={() => providerImportInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar entidades formadoras
                   </Button>
                   <Button variant="outline" className="rounded-full" onClick={openCreateProviderDialog}>
                     <Building2 className="mr-2 h-4 w-4" />

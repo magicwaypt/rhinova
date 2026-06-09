@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -48,8 +48,26 @@ const recommendedFlow = [
   "Verificar calendario e checklist de tarefas.",
 ]
 
+const PLAYBOOK_STORAGE_KEY = "rhinova-training-playbook-progress-v1"
+
 export default function TrainingsPlaybookPage() {
   const [completed, setCompleted] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYBOOK_STORAGE_KEY)
+      if (!raw) return
+
+      const parsed = JSON.parse(raw) as Record<string, boolean>
+      setCompleted(parsed)
+    } catch {
+      window.localStorage.removeItem(PLAYBOOK_STORAGE_KEY)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(PLAYBOOK_STORAGE_KEY, JSON.stringify(completed))
+  }, [completed])
 
   const totalSteps = trainingTestingGuide.length
   const completedCount = useMemo(
@@ -151,7 +169,10 @@ export default function TrainingsPlaybookPage() {
                 variant="ghost"
                 size="sm"
                 className="rounded-full text-muted-foreground"
-                onClick={() => setCompleted({})}
+                onClick={() => {
+                  setCompleted({})
+                  window.localStorage.removeItem(PLAYBOOK_STORAGE_KEY)
+                }}
               >
                 <RotateCcw className="mr-2 h-3.5 w-3.5" />
                 Repor

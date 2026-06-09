@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { departments, trainingParticipants, trainings as mockTrainings, users as mockUsers } from "@/lib/mock-data"
 import type { CalendarEvent, Document, User } from "@/lib/types"
+import { useAccessManagement } from "@/components/providers/access-management-provider"
 
 export type TrainingStatus = "scheduled" | "in_progress" | "completed" | "cancelled"
 export type TrainingFormat = "presencial" | "online" | "hibrido"
@@ -119,6 +120,8 @@ export interface TrainingProvider {
 
 export type TrainingTaskStatus = "pending" | "in_progress" | "completed"
 export type TrainingTaskPriority = "high" | "medium" | "low"
+export type TrainingTaskSource = "automatic" | "manual"
+export type TrainingTaskTemplateKey = "send_invites" | "validate_ru" | "collect_evidence"
 
 export interface TrainingTask {
   id: string
@@ -129,10 +132,14 @@ export interface TrainingTask {
   status: TrainingTaskStatus
   priority: TrainingTaskPriority
   notes?: string
+  source?: TrainingTaskSource
+  templateKey?: TrainingTaskTemplateKey
   createdAt: Date
 }
 
 export interface TrainingWorkspaceState {
+  scopeEntityId: string | null
+  scopeUserId: string | null
   trainings: TrainingActionRecord[]
   participantsByTraining: Record<string, TrainingParticipantRecord[]>
   tasks: TrainingTask[]
@@ -141,6 +148,8 @@ export interface TrainingWorkspaceState {
 }
 
 const emptyWorkspaceState: TrainingWorkspaceState = {
+  scopeEntityId: null,
+  scopeUserId: null,
   trainings: [],
   participantsByTraining: {},
   tasks: [],
@@ -227,7 +236,9 @@ export interface RuValidationResult {
   validParticipantCount: number
 }
 
-const STORAGE_KEY = "rhinova-training-workspace-v2"
+const LEGACY_STORAGE_KEY = "rhinova-training-workspace-v2"
+const STORAGE_KEY_PREFIX = "rhinova-training-workspace-v5"
+const TRAINING_WORKSPACE_RESET_KEY = "rhinova-training-workspace-reset-v5"
 export const collaboratorTemplatePath = "/templates/rhinova-colaboradores-modelo.xlsx"
 export const trainingProviderTemplatePath = "/templates/rhinova-entidades-formadoras-modelo.xlsx"
 const LEGACY_SEEDED_TRAINING_IDS = new Set(mockTrainings.map((training) => training.id))
@@ -268,6 +279,17 @@ export const taskPriorityLabels: Record<TrainingTaskPriority, string> = {
   high: "Alta",
   medium: "Media",
   low: "Baixa",
+}
+
+interface AutomaticTaskBlueprint {
+  templateKey: TrainingTaskTemplateKey
+  title: string
+  owner: string
+  dueDate: Date
+  status: TrainingTaskStatus
+  priority: TrainingTaskPriority
+  notes: string
+  createdAt: Date
 }
 
 export const ruCodeTables: Record<RuTableKey, RuTableEntry[]> = {
@@ -688,58 +710,130 @@ function buildParticipantsDirectory(trainings: TrainingActionRecord[], employees
   )
 }
 
+function buildAutomaticTaskBlueprints(training: TrainingActionRecord): AutomaticTaskBlueprint[] {
+  const sendInvitesStatus: TrainingTaskStatus =
+    training.status === "completed" || training.status === "in_progress" ? "completed" : "pending"
+  const readinessStatus: TrainingTaskStatus =
+    training.status === "completed"
+      ? "completed"
+      : training.status === "in_progress"
+        ? "in_progress"
+        : "pending"
+  const evidenceStatus: TrainingTaskStatus = training.status === "completed" ? "completed" : "pending"
+
+  return [
+    {
+      templateKey: "send_invites",
+      title: "Enviar convocatorias e confirmar presencas",
+      owner: "Equipa RH",
+      dueDate: shiftDays(training.startDate, -7),
+      status: sendInvitesStatus,
+      priority: "high",
+      notes: "Acao critica para garantir taxa de adesao e prova de comunicacao.",
+      createdAt: shiftDays(training.startDate, -20),
+    },
+    {
+      templateKey: "validate_ru",
+      title: "Validar T30-T36 e entidade formadora",
+      owner: "Compliance RH",
+      dueDate: shiftDays(training.startDate, -3),
+      status: readinessStatus,
+      priority: "high",
+      notes: "Confirmar codigos oficiais do Relatorio Unico e respetivos labels.",
+      createdAt: shiftDays(training.startDate, -16),
+    },
+    {
+      templateKey: "collect_evidence",
+      title: "Recolher evidencias para relatorio anual",
+      owner: "Compliance RH",
+      dueDate: shiftDays(training.endDate, 2),
+      status: evidenceStatus,
+      priority: "high",
+      notes: "Guardar horas, listas de presenca, certificados e entidade formadora.",
+      createdAt: shiftDays(training.startDate, -10),
+    },
+  ]
+}
+
+function inferAutomaticTaskTemplate(task: TrainingTask): TrainingTaskTemplateKey | undefined {
+  if (task.templateKey) return task.templateKey
+  if (task.title === "Enviar convocatorias e confirmar presencas") return "send_invites"
+  if (task.title === "Validar T30-T36 e entidade formadora") return "validate_ru"
+  if (task.title === "Recolher evidencias para relatorio anual") return "collect_evidence"
+  return undefined
+}
+
 function buildSeedTasks(trainings: TrainingActionRecord[]): TrainingTask[] {
-  const tasks: TrainingTask[] = []
-
-  for (const training of trainings) {
-    const sendInvitesStatus: TrainingTaskStatus =
-      training.status === "completed" || training.status === "in_progress" ? "completed" : "pending"
-    const readinessStatus: TrainingTaskStatus =
-      training.status === "completed"
-        ? "completed"
-        : training.status === "in_progress"
-          ? "in_progress"
-          : "pending"
-    const evidenceStatus: TrainingTaskStatus = training.status === "completed" ? "completed" : "pending"
-
-    tasks.push(
-      {
+  return trainings
+    .flatMap((training) =>
+      buildAutomaticTaskBlueprints(training).map((task) => ({
         id: createId("task"),
         trainingId: training.id,
-        title: "Enviar convocatorias e confirmar presencas",
-        owner: "Equipa RH",
-        dueDate: shiftDays(training.startDate, -7),
-        status: sendInvitesStatus,
-        priority: "high",
-        notes: "Acao critica para garantir taxa de adesao e prova de comunicacao.",
-        createdAt: shiftDays(training.startDate, -20),
-      },
-      {
-        id: createId("task"),
-        trainingId: training.id,
-        title: "Validar T30-T36 e entidade formadora",
-        owner: "Compliance RH",
-        dueDate: shiftDays(training.startDate, -3),
-        status: readinessStatus,
-        priority: "high",
-        notes: "Confirmar codigos oficiais do Relatorio Unico e respetivos labels.",
-        createdAt: shiftDays(training.startDate, -16),
-      },
-      {
-        id: createId("task"),
-        trainingId: training.id,
-        title: "Recolher evidencias para relatorio anual",
-        owner: "Compliance RH",
-        dueDate: shiftDays(training.endDate, 2),
-        status: evidenceStatus,
-        priority: "high",
-        notes: "Guardar horas, listas de presenca, certificados e entidade formadora.",
-        createdAt: shiftDays(training.startDate, -10),
-      },
+        title: task.title,
+        owner: task.owner,
+        dueDate: task.dueDate,
+        status: task.status,
+        priority: task.priority,
+        notes: task.notes,
+        source: "automatic" as const,
+        templateKey: task.templateKey,
+        createdAt: task.createdAt,
+      })),
     )
-  }
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+}
 
-  return tasks.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+function syncAutomaticTrainingTasks(tasks: TrainingTask[], training: TrainingActionRecord) {
+  const blueprintsByKey = new Map(
+    buildAutomaticTaskBlueprints(training).map((task) => [task.templateKey, task] as const),
+  )
+
+  const nextTasks = tasks.map((task) => {
+    if (task.trainingId !== training.id) return task
+
+    const templateKey = inferAutomaticTaskTemplate(task)
+    const isAutomatic = task.source === "automatic" || Boolean(templateKey)
+    if (!isAutomatic || !templateKey) return task
+
+    const blueprint = blueprintsByKey.get(templateKey)
+    if (!blueprint) return task
+
+    return {
+      ...task,
+      title: blueprint.title,
+      owner: blueprint.owner,
+      dueDate: blueprint.dueDate,
+      priority: blueprint.priority,
+      notes: blueprint.notes,
+      source: "automatic" as const,
+      templateKey,
+    }
+  })
+
+  const presentKeys = new Set(
+    nextTasks
+      .filter((task) => task.trainingId === training.id)
+      .map((task) => inferAutomaticTaskTemplate(task))
+      .filter((value): value is TrainingTaskTemplateKey => Boolean(value)),
+  )
+
+  const missingTasks = Array.from(blueprintsByKey.entries())
+    .filter(([templateKey]) => !presentKeys.has(templateKey))
+    .map(([templateKey, blueprint]) => ({
+      id: createId("task"),
+      trainingId: training.id,
+      title: blueprint.title,
+      owner: blueprint.owner,
+      dueDate: blueprint.dueDate,
+      status: blueprint.status,
+      priority: blueprint.priority,
+      notes: blueprint.notes,
+      source: "automatic" as const,
+      templateKey,
+      createdAt: blueprint.createdAt,
+    }))
+
+  return [...nextTasks, ...missingTasks].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
 }
 
 function createSeedState(): TrainingWorkspaceState {
@@ -954,6 +1048,14 @@ function serializeState(state: TrainingWorkspaceState) {
   return JSON.stringify(state)
 }
 
+function createEmptyWorkspaceState(scopeUserId: string | null, scopeEntityId: string | null): TrainingWorkspaceState {
+  return {
+    ...emptyWorkspaceState,
+    scopeUserId,
+    scopeEntityId,
+  }
+}
+
 function reviveState(raw: string | null): TrainingWorkspaceState | null {
   if (!raw) return null
 
@@ -1018,6 +1120,8 @@ function reviveState(raw: string | null): TrainingWorkspaceState | null {
     const validEmployeeIds = new Set(filteredEmployees.map((employee) => employee.id))
 
     return {
+      scopeEntityId: typeof parsed.scopeEntityId === "string" ? parsed.scopeEntityId : null,
+      scopeUserId: typeof parsed.scopeUserId === "string" ? parsed.scopeUserId : null,
       trainings: filteredTrainings,
       participantsByTraining: Object.fromEntries(
         Object.entries(filteredParticipantsByTraining).map(([trainingId, participants]) => [
@@ -1034,9 +1138,35 @@ function reviveState(raw: string | null): TrainingWorkspaceState | null {
   }
 }
 
-function persistState(next: TrainingWorkspaceState) {
+function getScopedStorageKey(userId: string, entityId: string) {
+  return `${STORAGE_KEY_PREFIX}:${userId}:${entityId}`
+}
+
+function persistState(storageKey: string, next: TrainingWorkspaceState) {
   if (typeof window === "undefined") return
-  window.localStorage.setItem(STORAGE_KEY, serializeState(next))
+  window.localStorage.setItem(storageKey, serializeState(next))
+}
+
+function clearLegacyTrainingWorkspaceData() {
+  if (typeof window === "undefined") return
+  if (window.localStorage.getItem(TRAINING_WORKSPACE_RESET_KEY) === "done") return
+
+  const keysToRemove: string[] = []
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (!key) continue
+
+    if (
+      key === LEGACY_STORAGE_KEY ||
+      key.startsWith("rhinova-training-workspace-v")
+    ) {
+      keysToRemove.push(key)
+    }
+  }
+
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key))
+  window.localStorage.setItem(TRAINING_WORKSPACE_RESET_KEY, "done")
 }
 
 function createParticipantRecord(
@@ -1271,24 +1401,62 @@ export function getTrainingCalendarEvents(state: TrainingWorkspaceState): Calend
 }
 
 export function useTrainingWorkspace() {
+  const { activeEntity, currentUser, isReady: accessReady } = useAccessManagement()
   const [state, setState] = useState<TrainingWorkspaceState>(emptyWorkspaceState)
   const [isReady, setIsReady] = useState(false)
+  const scopedStorageKey =
+    activeEntity?.id && currentUser?.id
+      ? getScopedStorageKey(currentUser.id, activeEntity.id)
+      : null
 
   useEffect(() => {
-    const storedState = reviveState(window.localStorage.getItem(STORAGE_KEY))
-    if (storedState) {
-      setState(storedState)
-    } else {
-      setState(emptyWorkspaceState)
-      persistState(emptyWorkspaceState)
+    if (!accessReady) {
+      setIsReady(false)
+      return
     }
+
+    setIsReady(false)
+
+    if (!scopedStorageKey) {
+      setState(createEmptyWorkspaceState(currentUser?.id || null, activeEntity?.id || null))
+      setIsReady(true)
+      return
+    }
+
+    clearLegacyTrainingWorkspaceData()
+
+    const storedState = reviveState(window.localStorage.getItem(scopedStorageKey))
+    const nextEmptyState = createEmptyWorkspaceState(currentUser.id, activeEntity.id)
+
+    if (
+      storedState &&
+      (storedState.scopeEntityId === null || storedState.scopeEntityId === activeEntity.id) &&
+      (storedState.scopeUserId === null || storedState.scopeUserId === currentUser.id)
+    ) {
+      setState({
+        ...storedState,
+        scopeEntityId: activeEntity.id,
+        scopeUserId: currentUser.id,
+      })
+    } else {
+      setState(nextEmptyState)
+      persistState(scopedStorageKey, nextEmptyState)
+    }
+
     setIsReady(true)
-  }, [])
+  }, [accessReady, activeEntity?.id, currentUser?.id, scopedStorageKey])
 
   const commit = (updater: TrainingWorkspaceState | ((previous: TrainingWorkspaceState) => TrainingWorkspaceState)) => {
     setState((previous) => {
-      const next = typeof updater === "function" ? updater(previous) : updater
-      persistState(next)
+      const baseNext = typeof updater === "function" ? updater(previous) : updater
+      const next = {
+        ...baseNext,
+        scopeEntityId: activeEntity?.id || null,
+        scopeUserId: currentUser?.id || null,
+      }
+      if (scopedStorageKey) {
+        persistState(scopedStorageKey, next)
+      }
       return next
     })
   }
@@ -1385,6 +1553,7 @@ export function useTrainingWorkspace() {
         ...previous,
         trainings: previous.trainings.map((training) => training.id === trainingId ? updatedTraining : training),
         participantsByTraining: updateTrainingParticipants(previous, updatedTraining, payload.participants),
+        tasks: syncAutomaticTrainingTasks(previous.tasks, updatedTraining),
       }
     })
   }
@@ -1791,6 +1960,7 @@ export function useTrainingWorkspace() {
   const addTask = (task: Omit<TrainingTask, "id" | "createdAt">) => {
     const nextTask: TrainingTask = {
       ...task,
+      source: task.source || "manual",
       id: createId("task"),
       createdAt: new Date(),
     }

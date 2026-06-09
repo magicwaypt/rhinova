@@ -17,6 +17,7 @@ import {
   MapPin,
   Plus,
   Sparkles,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -40,11 +41,13 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import type { TrainingActionRecord, TrainingFormat, TrainingParticipantPayload, TrainingParticipantStatus, TrainingStatus, TrainingType } from "@/lib/training-platform"
+import type { TrainingActionRecord, TrainingFormat, TrainingParticipantPayload, TrainingParticipantStatus, TrainingStatus, TrainingTask, TrainingType } from "@/lib/training-platform"
 import {
   getEmployeeRuMissingFields,
   isEmployeeRuReady,
   ruCodeTables,
+  taskPriorityLabels,
+  taskStatusLabels,
   trainingFormatLabels,
   trainingStatusLabels,
   useTrainingWorkspace,
@@ -216,7 +219,7 @@ function deriveInternal(type: TrainingType) {
 
 export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
   const router = useRouter()
-  const { state, isReady, departmentOptions, createTraining, updateTraining, createEmployee } = useTrainingWorkspace()
+  const { state, isReady, departmentOptions, createTraining, updateTraining, createEmployee, addTask, updateTaskStatus, deleteTask } = useTrainingWorkspace()
   const training = useMemo(
     () => state.trainings.find((item) => item.id === trainingId),
     [state.trainings, trainingId],
@@ -229,6 +232,7 @@ export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
   const [skillInput, setSkillInput] = useState("")
   const [departmentInput, setDepartmentInput] = useState("")
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false)
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false)
   const [step, setStep] = useState(0)
   const initializedTrainingIdRef = useRef<string | null>(null)
   const createDefaultsAppliedRef = useRef(false)
@@ -239,6 +243,14 @@ export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
     employeeNumber: "",
     jobTitle: "",
     location: "Lisboa",
+  })
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    owner: "Equipa RH",
+    dueDate: "",
+    status: "pending",
+    priority: "medium",
+    notes: "",
   })
 
   useEffect(() => {
@@ -290,6 +302,16 @@ export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
       )
     })
   }, [state.employees, userSearch])
+
+  const trainingTasks = useMemo(
+    () =>
+      trainingId
+        ? state.tasks
+            .filter((task) => task.trainingId === trainingId)
+            .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
+        : [],
+    [state.tasks, trainingId],
+  )
 
   const availableDepartments = useMemo(
     () =>
@@ -473,6 +495,35 @@ export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
       location: "Lisboa",
     })
     toast.success("Colaborador criado com ficha RH demo valida e associado a esta formacao.")
+  }
+
+  const handleAddTask = () => {
+    if (mode !== "edit" || !trainingId || !taskForm.title || !taskForm.dueDate) {
+      toast.error("Preencha titulo e prazo da tarefa.")
+      return
+    }
+
+    addTask({
+      trainingId,
+      title: taskForm.title,
+      owner: taskForm.owner,
+      dueDate: new Date(`${taskForm.dueDate}T09:00:00`),
+      status: taskForm.status as "pending" | "in_progress" | "completed",
+      priority: taskForm.priority as "high" | "medium" | "low",
+      notes: taskForm.notes,
+      source: "manual",
+    })
+
+    setTaskForm({
+      title: "",
+      owner: "Equipa RH",
+      dueDate: form.startDate || "",
+      status: "pending",
+      priority: "medium",
+      notes: "",
+    })
+    setTaskDialogOpen(false)
+    toast.success("Tarefa associada a esta formacao.")
   }
 
   const incompleteParticipants = useMemo(
@@ -690,6 +741,20 @@ export function TrainingFormPage({ mode, trainingId }: TrainingFormPageProps) {
               participantDrafts={participantDrafts}
               incompleteCount={incompleteParticipants.length}
               onEditStep={goToStep}
+            />
+          )}
+
+          {mode === "edit" && trainingId && (
+            <TrainingTasksEditorSection
+              trainingTasks={trainingTasks}
+              suggestedDate={form.startDate}
+              taskDialogOpen={taskDialogOpen}
+              setTaskDialogOpen={setTaskDialogOpen}
+              taskForm={taskForm}
+              setTaskForm={setTaskForm}
+              handleAddTask={handleAddTask}
+              updateTaskStatus={updateTaskStatus}
+              deleteTask={deleteTask}
             />
           )}
 
@@ -1230,13 +1295,6 @@ function CodesStep({
         />
       </div>
 
-      <div className="flex items-start gap-3 rounded-2xl border border-accent/40 bg-accent/10 p-4 text-sm">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-accent-foreground" />
-        <p className="text-accent-foreground/90">
-          Os códigos RU são guardados como string para preservar zeros à esquerda. Exemplo correto:{" "}
-          <span className="font-mono font-semibold">"01"</span>.
-        </p>
-      </div>
     </StepShell>
   )
 }
@@ -1280,37 +1338,37 @@ function ParticipantsStep(props: ParticipantsStepProps) {
     handleCreateEmployee,
   } = props
 
+  const departmentSummaries = useMemo(() => {
+    const selectedIds = new Set(selectedEmployeeIds)
+    const targetDepartments = new Set(form.targetDepartments)
+    const summaries = new Map<string, { name: string; total: number; selected: number; isTarget: boolean }>()
+
+    for (const employee of employees) {
+      const departmentName = employee.department || "Sem departamento"
+      const current = summaries.get(departmentName) ?? {
+        name: departmentName,
+        total: 0,
+        selected: 0,
+        isTarget: targetDepartments.has(departmentName),
+      }
+
+      current.total += 1
+      if (selectedIds.has(employee.id)) current.selected += 1
+      summaries.set(departmentName, current)
+    }
+
+    return Array.from(summaries.values()).sort((left, right) => {
+      if (left.isTarget !== right.isTarget) return left.isTarget ? -1 : 1
+      return left.name.localeCompare(right.name, "pt")
+    })
+  }, [employees, form.targetDepartments, selectedEmployeeIds])
+
   return (
     <StepShell
       icon={Users}
       title="Participantes"
       description="Selecione colaboradores e complete os códigos T28, T29, T35 e horas frequentadas."
     >
-      {/* Quick add */}
-      <div className="flex flex-col gap-3 rounded-2xl border bg-secondary/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-medium">Adicionar por departamento-alvo</p>
-          <p className="text-sm text-muted-foreground">Associe rapidamente todos os colaboradores relevantes.</p>
-          {form.targetDepartments.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {form.targetDepartments.map((department) => (
-                <Badge key={department} variant="secondary" className="rounded-full">
-                  {department}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="shrink-0 rounded-full"
-          onClick={() => addEmployeesByDepartments(form.targetDepartments)}
-        >
-          Adicionar grupo
-        </Button>
-      </div>
-
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Directory */}
         <div className="space-y-3">
@@ -1361,7 +1419,57 @@ function ParticipantsStep(props: ParticipantsStepProps) {
             placeholder="Pesquisar nome, email ou departamento"
             className="h-11"
           />
-          <ScrollArea className="h-[420px] rounded-2xl border">
+          <div className="rounded-2xl border bg-secondary/20 p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-medium">Seleção em bulk por departamento</p>
+                <p className="text-sm text-muted-foreground">Associe equipas inteiras com um clique.</p>
+              </div>
+              {form.targetDepartments.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => addEmployeesByDepartments(form.targetDepartments)}
+                >
+                  Associar departamentos-alvo
+                </Button>
+              )}
+            </div>
+            {departmentSummaries.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {departmentSummaries.map((department) => {
+                  const fullySelected = department.selected === department.total
+                  return (
+                    <Button
+                      key={department.name}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={fullySelected}
+                      className={cn(
+                        "h-auto rounded-full px-3 py-2 text-left",
+                        fullySelected && "border-primary/30 bg-primary/5 text-primary opacity-100",
+                      )}
+                      onClick={() => addEmployeesByDepartments([department.name])}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{department.name}</span>
+                        <span className="rounded-full bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
+                          {department.selected}/{department.total}
+                        </span>
+                        {department.isTarget && (
+                          <span className="text-[10px] uppercase tracking-[0.16em] text-primary">Alvo</span>
+                        )}
+                      </span>
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          <ScrollArea className="h-[360px] rounded-2xl border">
             <div className="space-y-2 p-3">
               {filteredEmployees.length === 0 && (
                 <p className="px-2 py-8 text-center text-sm text-muted-foreground">Sem colaboradores para mostrar.</p>
@@ -1413,7 +1521,7 @@ function ParticipantsStep(props: ParticipantsStepProps) {
         {/* Selected participants */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <SectionLabel>Selecionados ({participantDrafts.length})</SectionLabel>
+            <SectionLabel>Associados ({participantDrafts.length})</SectionLabel>
             {incompleteCount > 0 && (
               <Badge variant="destructive" className="rounded-full text-[10px]">
                 {incompleteCount} por completar
@@ -1421,7 +1529,7 @@ function ParticipantsStep(props: ParticipantsStepProps) {
             )}
           </div>
           <ScrollArea className="h-[420px] rounded-2xl border">
-            <div className="space-y-3 p-3">
+            <div className="divide-y">
               {participantDrafts.length === 0 && (
                 <div className="flex h-[360px] flex-col items-center justify-center gap-2 text-center">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
@@ -1438,11 +1546,12 @@ function ParticipantsStep(props: ParticipantsStepProps) {
                 const ruReady = employee ? isEmployeeRuReady(employee as never) : false
                 const missingEmployeeFields = employee ? getEmployeeRuMissingFields(employee as never) : ["Ficha RH em falta"]
                 return (
-                  <div key={participant.employeeId} className="space-y-3 rounded-xl border p-3">
+                  <div key={participant.employeeId} className="px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-medium">{participant.name}</p>
+                          <span className="text-xs text-muted-foreground">{participant.department}</span>
                           <Badge variant={ruReady ? "secondary" : "destructive"} className="rounded-full text-[10px]">
                             {ruReady ? "Ficha OK" : "Validar ficha"}
                           </Badge>
@@ -1462,13 +1571,13 @@ function ParticipantsStep(props: ParticipantsStepProps) {
                     </div>
 
                     {employee && !ruReady && (
-                      <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-800">
+                      <div className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-800">
                         Faltam campos RH: {missingEmployeeFields.join(", ")}
                       </div>
                     )}
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-1.5">
                         <Label className="text-xs">Horas frequentadas</Label>
                         <Input
                           type="number"
@@ -1477,13 +1586,13 @@ function ParticipantsStep(props: ParticipantsStepProps) {
                           onChange={(event) => updateParticipantDraft(participant.employeeId, { attendedHours: Number(event.target.value) })}
                         />
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="min-w-0 space-y-1.5">
                         <Label className="text-xs">Estado</Label>
                         <Select
                           value={participant.status}
                           onValueChange={(value: TrainingParticipantStatus) => updateParticipantDraft(participant.employeeId, { status: value })}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1494,20 +1603,24 @@ function ParticipantsStep(props: ParticipantsStepProps) {
                           </SelectContent>
                         </Select>
                       </div>
-                      <RuSelect
-                        compact
-                        label="T28 Frequência"
-                        table="T28"
-                        value={participant.trainingFrequencySituationCode}
-                        onValueChange={(value) => updateParticipantDraft(participant.employeeId, { trainingFrequencySituationCode: value })}
-                      />
-                      <RuSelect
-                        compact
-                        label="T29 Período"
-                        table="T29"
-                        value={participant.trainingReferencePeriodCode}
-                        onValueChange={(value) => updateParticipantDraft(participant.employeeId, { trainingReferencePeriodCode: value })}
-                      />
+                      <div className="min-w-0">
+                        <RuSelect
+                          compact
+                          label="T28 Frequência"
+                          table="T28"
+                          value={participant.trainingFrequencySituationCode}
+                          onValueChange={(value) => updateParticipantDraft(participant.employeeId, { trainingFrequencySituationCode: value })}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <RuSelect
+                          compact
+                          label="T29 Período"
+                          table="T29"
+                          value={participant.trainingReferencePeriodCode}
+                          onValueChange={(value) => updateParticipantDraft(participant.employeeId, { trainingReferencePeriodCode: value })}
+                        />
+                      </div>
                       <div className="sm:col-span-2">
                         <RuSelect
                           compact
@@ -1526,6 +1639,213 @@ function ParticipantsStep(props: ParticipantsStepProps) {
         </div>
       </div>
     </StepShell>
+  )
+}
+
+function TrainingTasksEditorSection({
+  trainingTasks,
+  suggestedDate,
+  taskDialogOpen,
+  setTaskDialogOpen,
+  taskForm,
+  setTaskForm,
+  handleAddTask,
+  updateTaskStatus,
+  deleteTask,
+}: {
+  trainingTasks: TrainingTask[]
+  suggestedDate: string
+  taskDialogOpen: boolean
+  setTaskDialogOpen: (open: boolean) => void
+  taskForm: {
+    title: string
+    owner: string
+    dueDate: string
+    status: string
+    priority: string
+    notes: string
+  }
+  setTaskForm: (
+    value:
+      | {
+          title: string
+          owner: string
+          dueDate: string
+          status: string
+          priority: string
+          notes: string
+        }
+      | ((current: {
+          title: string
+          owner: string
+          dueDate: string
+          status: string
+          priority: string
+          notes: string
+        }) => {
+          title: string
+          owner: string
+          dueDate: string
+          status: string
+          priority: string
+          notes: string
+        }),
+  ) => void
+  handleAddTask: () => void
+  updateTaskStatus: (taskId: string, status: "pending" | "in_progress" | "completed") => void
+  deleteTask: (taskId: string) => void
+}) {
+  const automaticTasks = trainingTasks.filter((task) => task.source === "automatic" || task.templateKey)
+  const manualTasks = trainingTasks.filter((task) => task.source === "manual" || (!task.source && !task.templateKey))
+
+  return (
+    <Card className="border-none shadow-soft">
+      <CardHeader className="gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Gestao de tarefas da formacao</CardTitle>
+            <CardDescription>
+              As tarefas automaticas ajustam-se com as datas da formacao. O gestor RH pode adicionar tarefas manuais, atribuir owners e marcar conclusao aqui.
+            </CardDescription>
+          </div>
+          <Dialog
+            open={taskDialogOpen}
+            onOpenChange={(open) => {
+              setTaskDialogOpen(open)
+              if (open) {
+                setTaskForm((current) => ({
+                  ...current,
+                  dueDate: current.dueDate || suggestedDate,
+                }))
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button type="button" className="rounded-full">
+                <Plus className="mr-2 h-4 w-4" />
+                Nova tarefa
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar tarefa</DialogTitle>
+                <DialogDescription>Crie uma tarefa operacional associada diretamente a esta formacao.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Titulo</Label>
+                  <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Owner</Label>
+                    <Input value={taskForm.owner} onChange={(event) => setTaskForm((current) => ({ ...current, owner: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Prazo</Label>
+                    <Input type="date" value={taskForm.dueDate} onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Estado</Label>
+                    <Select value={taskForm.status} onValueChange={(value) => setTaskForm((current) => ({ ...current, status: value }))}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pendente</SelectItem>
+                        <SelectItem value="in_progress">Em progresso</SelectItem>
+                        <SelectItem value="completed">Concluida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Prioridade</Label>
+                    <Select value={taskForm.priority} onValueChange={(value) => setTaskForm((current) => ({ ...current, priority: value }))}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="high">Alta</SelectItem>
+                        <SelectItem value="medium">Media</SelectItem>
+                        <SelectItem value="low">Baixa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notas</Label>
+                  <Textarea value={taskForm.notes} onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))} rows={4} />
+                </div>
+                <Button type="button" onClick={handleAddTask}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Guardar tarefa
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{automaticTasks.length} automatica(s)</Badge>
+          <Badge variant="outline">{manualTasks.length} manual(is)</Badge>
+          <Badge variant="secondary">{trainingTasks.filter((task) => task.status !== "completed").length} por concluir</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {trainingTasks.length === 0 && (
+          <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+            Ainda nao existem tarefas associadas a esta formacao.
+          </div>
+        )}
+        {trainingTasks.map((task) => (
+          <div key={task.id} className="rounded-2xl border p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <Badge className={task.status === "completed" ? "bg-emerald-100 text-emerald-700" : task.status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}>
+                    {taskStatusLabels[task.status]}
+                  </Badge>
+                  <Badge variant="outline">{taskPriorityLabels[task.priority]}</Badge>
+                  <Badge variant={task.source === "manual" ? "secondary" : "outline"}>
+                    {task.source === "manual" ? "Manual" : "Automatica"}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="font-medium">{task.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{task.notes || "Sem notas adicionais."}</p>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>Owner: {task.owner}</span>
+                  <span>Prazo: {new Date(task.dueDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {task.status !== "pending" && (
+                  <Button size="sm" variant="outline" onClick={() => updateTaskStatus(task.id, "pending")}>
+                    Reabrir
+                  </Button>
+                )}
+                {task.status !== "in_progress" && (
+                  <Button size="sm" variant="outline" onClick={() => updateTaskStatus(task.id, "in_progress")}>
+                    Em curso
+                  </Button>
+                )}
+                {task.status !== "completed" && (
+                  <Button size="sm" variant="outline" onClick={() => updateTaskStatus(task.id, "completed")}>
+                    Concluir
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => deleteTask(task.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -1779,7 +2099,7 @@ function RuSelect({
     <div className="space-y-1.5">
       <Label className={compact ? "text-xs" : undefined}>{label}</Label>
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className={compact ? undefined : "h-11"}>
+        <SelectTrigger className={cn("w-full min-w-0", compact ? undefined : "h-11")}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -80,6 +80,12 @@ interface ProvisionedManagedUserPayload {
   memberships: EntityMembership[]
 }
 
+interface AccessManagementStatePayload {
+  users: Array<Omit<ManagedUser, "lastAccessAt"> & { lastAccessAt?: string }>
+  entities: Array<Omit<ManagedEntity, "createdAt"> & { createdAt: string }>
+  memberships: EntityMembership[]
+}
+
 interface AccessManagementContextValue {
   state: AccessManagementState
   isReady: boolean
@@ -88,9 +94,9 @@ interface AccessManagementContextValue {
   isSuperAdmin: boolean
   currentUserEntities: ManagedEntity[]
   currentUserMemberships: EntityMembership[]
-  createEntity: (payload: CreateEntityPayload) => ManagedEntity
-  updateEntity: (entityId: string, payload: UpdateEntityPayload) => ManagedEntity | null
-  deleteEntity: (entityId: string) => void
+  createEntity: (payload: CreateEntityPayload) => Promise<ManagedEntity>
+  updateEntity: (entityId: string, payload: UpdateEntityPayload) => Promise<ManagedEntity | null>
+  deleteEntity: (entityId: string) => Promise<void>
   createManagedUser: (payload: CreateManagedUserPayload) => Promise<ManagedUser>
   updateManagedUser: (userId: string, payload: Omit<CreateManagedUserPayload, "password">) => Promise<ManagedUser>
   deleteManagedUser: (userId: string) => Promise<void>
@@ -99,8 +105,8 @@ interface AccessManagementContextValue {
   signInAsManagedUser: (email: string, password: string, remember?: boolean) => Promise<ManagedUser | null>
   signOut: () => Promise<void>
   assignEntityToUser: (userId: string, entityId: string, role: EntityRole) => void
-  updateMembershipRole: (membershipId: string, role: EntityRole) => void
-  setDefaultEntityForUser: (userId: string, entityId: string) => void
+  updateMembershipRole: (membershipId: string, role: EntityRole) => Promise<void>
+  setDefaultEntityForUser: (userId: string, entityId: string) => Promise<void>
   getMembershipsForUser: (userId: string) => EntityMembership[]
   getEntitiesForUser: (userId: string) => ManagedEntity[]
 }
@@ -318,6 +324,35 @@ function mergeProvisionedManagedUser(
   }
 }
 
+function mergeAccessManagementSnapshot(
+  state: AccessManagementState,
+  payload: AccessManagementStatePayload,
+): AccessManagementState {
+  const nextUsers = payload.users.map((user) => ({
+    ...user,
+    lastAccessAt: user.lastAccessAt ? new Date(user.lastAccessAt) : undefined,
+  }))
+  const nextEntities = payload.entities.map((entity) => ({
+    ...entity,
+    createdAt: new Date(entity.createdAt),
+  }))
+  const validEntityIds = new Set(nextEntities.map((entity) => entity.id))
+  const activeEntityId =
+    state.activeEntityId && validEntityIds.has(state.activeEntityId)
+      ? state.activeEntityId
+      : nextEntities[0]?.id || null
+
+  return ensurePlatformAccess({
+    ...state,
+    activeEntityId,
+    entities: nextEntities,
+    users: nextUsers,
+    memberships: payload.memberships.filter(
+      (membership) => validEntityIds.has(membership.entityId),
+    ),
+  })
+}
+
 function serializeState(state: AccessManagementState) {
   return JSON.stringify(state)
 }
@@ -376,19 +411,37 @@ export function AccessManagementProvider({
         const authenticatedEmail = payload?.authenticated ? payload.email || null : null
 
         if (authenticatedEmail) {
-          const meResponse = await fetch("/api/auth/me", {
+          const adminStateResponse = await fetch("/api/auth/access-management", {
             cache: "no-store",
           })
 
-          if (meResponse.ok) {
-            const mePayload = (await meResponse.json()) as ProvisionedManagedUserPayload & {
-              authenticated?: boolean
+          if (adminStateResponse.ok) {
+            const adminStatePayload = (await adminStateResponse.json()) as
+              | ({ ok: true } & AccessManagementStatePayload)
+              | { error?: string }
+
+            if ("ok" in adminStatePayload) {
+              baseState = mergeAccessManagementSnapshot(baseState, {
+                users: adminStatePayload.users || [],
+                entities: adminStatePayload.entities || [],
+                memberships: adminStatePayload.memberships || [],
+              })
             }
-            baseState = mergeProvisionedManagedUser(baseState, {
-              user: mePayload.user,
-              entities: mePayload.entities || [],
-              memberships: mePayload.memberships || [],
+          } else {
+            const meResponse = await fetch("/api/auth/me", {
+              cache: "no-store",
             })
+
+            if (meResponse.ok) {
+              const mePayload = (await meResponse.json()) as ProvisionedManagedUserPayload & {
+                authenticated?: boolean
+              }
+              baseState = mergeProvisionedManagedUser(baseState, {
+                user: mePayload.user,
+                entities: mePayload.entities || [],
+                memberships: mePayload.memberships || [],
+              })
+            }
           }
         }
 
@@ -430,34 +483,72 @@ export function AccessManagementProvider({
     })
   }
 
-  const createEntity = (payload: CreateEntityPayload) => {
+  const createEntity = async (payload: CreateEntityPayload) => {
+    const response = await fetch("/api/auth/managed-entity", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...payload,
+        status: "setup",
+      }),
+    })
+
+    const result = (await response.json()) as
+      | {
+          ok: true
+          entity: Omit<ManagedEntity, "createdAt"> & { createdAt: string }
+        }
+      | { error?: string }
+
+    if (!response.ok || !("ok" in result)) {
+      throw new Error(result.error || "Não foi possível criar a entidade.")
+    }
+
     const entity: ManagedEntity = {
-      id: createId("entity"),
-      name: payload.name,
-      legalName: payload.legalName,
-      nif: payload.nif,
-      industry: payload.industry,
-      employeeCount: payload.employeeCount,
-      status: "setup",
-      headquarters: payload.headquarters,
-      createdAt: new Date(),
+      ...result.entity,
+      createdAt: new Date(result.entity.createdAt),
     }
 
     commit((previous) => ({
       ...previous,
-      entities: [entity, ...previous.entities],
+      entities: [entity, ...previous.entities.filter((item) => item.id !== entity.id)],
     }))
 
     return entity
   }
 
-  const updateEntity = (entityId: string, payload: UpdateEntityPayload) => {
+  const updateEntity = async (entityId: string, payload: UpdateEntityPayload) => {
     const currentEntity = state.entities.find((entity) => entity.id === entityId)
     if (!currentEntity) return null
 
+    const response = await fetch("/api/auth/managed-entity", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: entityId,
+        ...payload,
+        createdAt: currentEntity.createdAt.toISOString(),
+      }),
+    })
+
+    const result = (await response.json()) as
+      | {
+          ok: true
+          entity: Omit<ManagedEntity, "createdAt"> & { createdAt: string }
+        }
+      | { error?: string }
+
+    if (!response.ok || !("ok" in result)) {
+      throw new Error(result.error || "Não foi possível atualizar a entidade.")
+    }
+
     const updatedEntity: ManagedEntity = {
-      ...currentEntity,
-      ...payload,
+      ...result.entity,
+      createdAt: new Date(result.entity.createdAt),
     }
 
     commit((previous) => ({
@@ -470,7 +561,23 @@ export function AccessManagementProvider({
     return updatedEntity
   }
 
-  const deleteEntity = (entityId: string) => {
+  const deleteEntity = async (entityId: string) => {
+    const response = await fetch("/api/auth/managed-entity", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        entityId,
+      }),
+    })
+
+    const result = (await response.json()) as { ok?: true; error?: string }
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Não foi possível remover a entidade.")
+    }
+
     commit((previous) => {
       const remainingEntities = previous.entities.filter((entity) => entity.id !== entityId)
       const remainingMemberships = previous.memberships.filter((membership) => membership.entityId !== entityId)
@@ -493,7 +600,6 @@ export function AccessManagementProvider({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        userId,
         name: payload.name,
         email: payload.email,
         title: payload.title,
@@ -515,6 +621,10 @@ export function AccessManagementProvider({
 
     if (!response.ok || !("ok" in result)) {
       throw new Error(result.error || "Não foi possível criar o user.")
+    }
+
+    if (!result.user) {
+      throw new Error("O backend não devolveu o user criado.")
     }
 
     const provisionedPayload = {
@@ -568,6 +678,10 @@ export function AccessManagementProvider({
 
     if (!response.ok || !("ok" in result)) {
       throw new Error(result.error || "Não foi possível atualizar o user.")
+    }
+
+    if (!result.user) {
+      throw new Error("O backend não devolveu o user atualizado.")
     }
 
     const nextUser: ManagedUser = {
@@ -672,6 +786,10 @@ export function AccessManagementProvider({
       throw new Error(result.error || "Não foi possível definir a password do user.")
     }
 
+    if (!result.user) {
+      throw new Error("O backend não devolveu o user atualizado.")
+    }
+
     commit((previous) =>
       mergeProvisionedManagedUser(previous, {
         user: result.user,
@@ -715,6 +833,36 @@ export function AccessManagementProvider({
     }
 
     const normalizedEmail = email.trim().toLowerCase()
+    const adminStateResponse = await fetch("/api/auth/access-management", {
+      cache: "no-store",
+    })
+
+    if (adminStateResponse.ok) {
+      const adminStatePayload = (await adminStateResponse.json()) as
+        | ({ ok: true } & AccessManagementStatePayload)
+        | { error?: string }
+
+      if ("ok" in adminStatePayload) {
+        let signedInAdmin: ManagedUser | undefined
+
+        commit((previous) => {
+          const hydratedState = mergeAccessManagementSnapshot(previous, {
+            users: adminStatePayload.users || [],
+            entities: adminStatePayload.entities || [],
+            memberships: adminStatePayload.memberships || [],
+          })
+          const nextState = applyAuthenticatedSession(hydratedState, normalizedEmail)
+
+          signedInAdmin = nextState.users.find(
+            (item) => item.email.toLowerCase() === normalizedEmail,
+          )
+
+          return nextState
+        })
+
+        return signedInAdmin ?? null
+      }
+    }
 
     // Always hydrate from the server after a successful login so we never rely
     // on stale or corrupted client state from localStorage.
@@ -790,7 +938,24 @@ export function AccessManagementProvider({
     })
   }
 
-  const updateMembershipRole = (membershipId: string, role: EntityRole) => {
+  const updateMembershipRole = async (membershipId: string, role: EntityRole) => {
+    const response = await fetch("/api/auth/managed-membership", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        membershipId,
+        role,
+      }),
+    })
+
+    const result = (await response.json()) as { ok?: true; error?: string }
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Não foi possível atualizar a role.")
+    }
+
     commit((previous) => ({
       ...previous,
       memberships: previous.memberships.map((membership) =>
@@ -799,7 +964,25 @@ export function AccessManagementProvider({
     }))
   }
 
-  const setDefaultEntityForUser = (userId: string, entityId: string) => {
+  const setDefaultEntityForUser = async (userId: string, entityId: string) => {
+    const response = await fetch("/api/auth/managed-membership", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "set-default",
+        userId,
+        entityId,
+      }),
+    })
+
+    const result = (await response.json()) as { ok?: true; error?: string }
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Não foi possível atualizar a entidade por defeito.")
+    }
+
     commit((previous) => ({
       ...previous,
       memberships: previous.memberships.map((membership) =>

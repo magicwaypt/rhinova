@@ -101,6 +101,7 @@ const modules: NavModule[] = [
     icon: GraduationCap,
     items: [
       { name: "Catalogo", href: "/dashboard/trainings", icon: BookOpen },
+      { name: "Todas as formacoes", href: "/dashboard/trainings/all", icon: ClipboardList },
       { name: "Colaboradores", href: "/dashboard/trainings#colaboradores", icon: Users },
       { name: "Calendario", href: "/dashboard/calendar", icon: Calendar },
       { name: "Certificacoes", href: "/dashboard/certifications", icon: Award },
@@ -143,12 +144,15 @@ const bottomNav: BottomNavItem[] = [
 
 function NavModuleSection({ module, pathname }: { module: NavModule; pathname: string }) {
   const [activeHash, setActiveHash] = useState("")
-  const hasActiveItem = module.items.some((item) => {
-    const [baseHref, hash = ""] = item.href.split("#")
-    const matchesPath = pathname === baseHref || pathname.startsWith(baseHref + "/")
-    if (!hash) return matchesPath
-    return pathname === baseHref && activeHash === `#${hash}`
-  })
+  const activeItemHref = module.items
+    .filter((item) => {
+      const [baseHref, hash = ""] = item.href.split("#")
+      const matchesPath = pathname === baseHref || pathname.startsWith(baseHref + "/")
+      if (!hash) return matchesPath
+      return pathname === baseHref && activeHash === `#${hash}`
+    })
+    .sort((left, right) => right.href.length - left.href.length)[0]?.href
+  const hasActiveItem = Boolean(activeItemHref)
   const isLocked = module.locked ?? module.name !== ACTIVE_TESTING_MODULE
   const [isOpen, setIsOpen] = useState((module.defaultOpen || hasActiveItem) && !isLocked)
 
@@ -198,10 +202,7 @@ function NavModuleSection({ module, pathname }: { module: NavModule; pathname: s
       {isOpen && (
         <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
           {module.items.map((item) => {
-            const [baseHref, hash = ""] = item.href.split("#")
-            const isActive = hash
-              ? pathname === baseHref && activeHash === `#${hash}`
-              : pathname === baseHref || pathname.startsWith(baseHref + "/")
+            const isActive = item.href === activeItemHref
             return (
               <Link
                 key={item.name}
@@ -232,6 +233,10 @@ function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const showTrainingAssistant =
+    pathname.startsWith("/dashboard/trainings") ||
+    pathname.startsWith("/dashboard/calendar") ||
+    pathname.startsWith("/dashboard/certifications")
   const unreadNotifications = notifications.filter(n => !n.read).length
   const {
     activeEntity,
@@ -575,8 +580,7 @@ function DashboardShell({
         </main>
       </div>
 
-      {/* AI Chat Widget */}
-      <AIChatWidget />
+      {showTrainingAssistant && <AIChatWidget />}
     </div>
   )
 }
