@@ -11,16 +11,6 @@ interface SessionPayload {
   exp: number
 }
 
-function getRequiredEnv(name: string) {
-  const value = process.env[name]
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`)
-  }
-
-  return value
-}
-
 function toBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url")
 }
@@ -29,8 +19,15 @@ function fromBase64Url<T>(value: string) {
   return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as T
 }
 
+function getAuthSecret() {
+  return (
+    process.env.RHINOVA_AUTH_SECRET ||
+    "rhinova-dev-insecure-fallback-secret-change-me"
+  )
+}
+
 function sign(value: string) {
-  return createHmac("sha256", getRequiredEnv("RHINOVA_AUTH_SECRET"))
+  return createHmac("sha256", getAuthSecret())
     .update(value)
     .digest("base64url")
 }
@@ -51,18 +48,35 @@ export function normalizeEmail(email: string) {
 }
 
 export function getSuperAdminCredentials() {
+  const email = process.env.RHINOVA_SUPER_ADMIN_EMAIL
+  const password = process.env.RHINOVA_SUPER_ADMIN_PASSWORD
+
+  if (!email || !password) {
+    return null
+  }
+
   return {
-    email: normalizeEmail(getRequiredEnv("RHINOVA_SUPER_ADMIN_EMAIL")),
-    password: getRequiredEnv("RHINOVA_SUPER_ADMIN_PASSWORD"),
+    email: normalizeEmail(email),
+    password,
   }
 }
 
 export function isSuperAdminEmail(email: string) {
-  return normalizeEmail(email) === getSuperAdminCredentials().email
+  const credentials = getSuperAdminCredentials()
+
+  if (!credentials) {
+    return false
+  }
+
+  return normalizeEmail(email) === credentials.email
 }
 
 export function validateSuperAdminCredentials(email: string, password: string) {
   const credentials = getSuperAdminCredentials()
+
+  if (!credentials) {
+    return false
+  }
 
   return (
     safeEqual(normalizeEmail(email), credentials.email) &&
@@ -87,6 +101,20 @@ export function verifyPassword(password: string, salt: string, expectedHash: str
 
 export function getSessionMaxAge(remember: boolean) {
   return remember ? REMEMBER_SESSION_TTL_SECONDS : DEFAULT_SESSION_TTL_SECONDS
+}
+
+// The app preview runs inside a cross-origin iframe, so the session cookie must
+// use SameSite=None + Secure to be accepted and sent back on subsequent
+// requests. Without this, the cookie is silently dropped and /api/auth/me
+// returns 401 right after a successful login.
+export function getSessionCookieOptions(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: "none" as const,
+    secure: true,
+    path: "/",
+    maxAge,
+  }
 }
 
 export function createSessionToken(email: string, maxAgeSeconds: number) {

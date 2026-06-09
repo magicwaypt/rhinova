@@ -715,40 +715,44 @@ export function AccessManagementProvider({
     }
 
     const normalizedEmail = email.trim().toLowerCase()
-    let user = state.users.find((item) => item.email.toLowerCase() === normalizedEmail)
 
-    if (!user) {
-      const meResponse = await fetch("/api/auth/me", {
-        cache: "no-store",
-      })
+    // Always hydrate from the server after a successful login so we never rely
+    // on stale or corrupted client state from localStorage.
+    const meResponse = await fetch("/api/auth/me", {
+      cache: "no-store",
+    })
 
-      if (meResponse.ok) {
-        const mePayload = (await meResponse.json()) as ProvisionedManagedUserPayload & {
-          authenticated?: boolean
-        }
-
-        if (mePayload.user) {
-          const hydratedState = mergeProvisionedManagedUser(state, {
-            user: mePayload.user,
-            entities: mePayload.entities || [],
-            memberships: mePayload.memberships || [],
-          })
-
-          user = hydratedState.users.find(
-            (item) => item.email.toLowerCase() === normalizedEmail,
-          )
-          commit(hydratedState)
-        }
-      }
-    }
-
-    if (!user) {
+    if (!meResponse.ok) {
       return null
     }
 
-    commit((previous) => applyAuthenticatedSession(previous, normalizedEmail))
+    const mePayload = (await meResponse.json()) as ProvisionedManagedUserPayload & {
+      authenticated?: boolean
+    }
 
-    return user
+    if (!mePayload.user) {
+      return null
+    }
+
+    let signedInUser: ManagedUser | undefined
+
+    commit((previous) => {
+      const hydratedState = mergeProvisionedManagedUser(previous, {
+        user: mePayload.user,
+        entities: mePayload.entities || [],
+        memberships: mePayload.memberships || [],
+      })
+
+      const nextState = applyAuthenticatedSession(hydratedState, normalizedEmail)
+
+      signedInUser = nextState.users.find(
+        (item) => item.email.toLowerCase() === normalizedEmail,
+      )
+
+      return nextState
+    })
+
+    return signedInUser ?? null
   }
 
   const signOut = async () => {
